@@ -1,5 +1,6 @@
 <?php
 // Web ルート外のディレクトリへのパス
+require __DIR__ . '/auth.php';
 define('BASE_DIR', realpath(__DIR__ . '/../'));
 define('NEXT_DIR', BASE_DIR . '/next-app');
 define('PID_FILE', BASE_DIR . '/pids/nextjs.pid');

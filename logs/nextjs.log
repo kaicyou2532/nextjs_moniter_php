@@ -1,0 +1,5 @@
+
+> nakamurakiichi@0.0.0 start
+> node ./bin/www
+
+Port 3000 is already in use
