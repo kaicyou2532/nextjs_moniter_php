@@ -1,4 +1,4 @@
-# AIMcommonsサイト 管理ツール / AIMcommons website Management Tool
+# nextjs php 管理ツール
 
 ## 概要 / Overview
 Docker を使わずに、PHP ベースの Web インターフェースから Next.js アプリケーションを  
