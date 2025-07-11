@@ -1,5 +1,6 @@
+npm ERR! Missing script: "dev"
+npm ERR! 
+npm ERR! To see a list of scripts, run:
+npm ERR!   npm run
 
-> nakamurakiichi@0.0.0 start
-> node ./bin/www
-
-Port 3000 is already in use
+npm ERR! A complete log of this run can be found in: /Users/nakamurakiichi/.npm/_logs/2025-07-11T01_05_34_357Z-debug-0.log

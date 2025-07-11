@@ -98,9 +98,10 @@ require __DIR__ . '/auth.php';
     </header>
     <div class="controls">
       <button onclick="send('build')">ビルド</button>
-      <button onclick="send('start')">起動</button>
-      <button onclick="send('stop')">停止</button>
-      <button onclick="send('restart')">再起動</button>
+      <button onclick="send('stop')">WEBサーバー停止</button>
+      <button onclick="send('Renewal')">最新版に更新</button>
+      <button onclick="send('nginx')">リバースプロキシ再起動</button>
+      <button onclick="send('dev')">開発者モードで起動</button>
       <button onclick="send('status')">状態確認</button>
     </div>
     <div id="status">-- ステータス表示 --</div>
