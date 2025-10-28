@@ -1,7 +1,7 @@
 # PHP管理ツール用Dockerfile
 FROM php:8.3-apache
 
-# 必要なパッケージをインストール
+# パッケージインストール
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -11,41 +11,34 @@ RUN apt-get update && apt-get install -y \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20.x をインストール
+# Node.js 20.x インストール
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# 必要なPHP拡張をインストール
+# PHP拡張インストール
 RUN docker-php-ext-install pcntl posix
 
-# Apacheの設定
+# Apache mod_rewrite有効化
 RUN a2enmod rewrite
+
+# Apache設定
 COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
 
-# 作業ディレクトリの設定
-WORKDIR /var/www/html
+# nginx設定
+COPY nginx.conf /etc/nginx/sites-available/default
+RUN rm -f /etc/nginx/sites-enabled/default && \
+    ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
 
-# アプリケーションファイルをコピー
-COPY . .
-
-# 必要なディレクトリを作成
-RUN mkdir -p logs pids \
-    && chmod 755 logs pids \
-    && chown -R www-data:www-data /var/www/html
-
-# nginxの簡素化された設定
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Supervisorの設定
+# supervisor設定
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# 作業ディレクトリの設定
+# 作業ディレクトリ設定
 WORKDIR /var/www/html
 
-# アプリケーションファイルをコピー
+# ファイルをコピー
 COPY . .
 
-# 必要なディレクトリを作成
+# ディレクトリ作成と権限設定
 RUN mkdir -p logs pids \
     && chmod 755 logs pids \
     && chown -R www-data:www-data /var/www/html
@@ -53,8 +46,8 @@ RUN mkdir -p logs pids \
 # ポート公開
 EXPOSE 80 3000
 
-# 環境変数の設定
+# 環境変数
 ENV GITURL=""
 
-# Supervisorで複数サービスを起動
+# 起動コマンド
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
