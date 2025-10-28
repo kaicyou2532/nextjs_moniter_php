@@ -23,6 +23,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # PHP拡張のインストール
 RUN docker-php-ext-install pcntl posix
 
+# Git設定（安全なディレクトリとして追加）
+RUN git config --global --add safe.directory /var/www/html/next-app && \
+    git config --global --add safe.directory '*'
+
 # Apache設定
 RUN a2enmod rewrite
 COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
@@ -41,8 +45,8 @@ WORKDIR /var/www/html
 COPY . /var/www/html/
 
 # ディレクトリの作成と権限設定
-RUN mkdir -p logs pids && \
-    chmod -R 755 logs pids && \
+RUN mkdir -p logs pids next-app && \
+    chmod -R 755 logs pids next-app && \
     chown -R www-data:www-data /var/www/html
 
 # ポートを公開

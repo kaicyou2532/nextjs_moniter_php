@@ -20,6 +20,10 @@ services:
         source: ./pids
         target: /var/www/html/pids
     environment:
-      GITURL: ""
+      GITURL: "https://github.com/AIM-SC/next-website.git"
+      # Gitの安全なディレクトリ設定
+      GIT_CONFIG_GLOBAL: /tmp/.gitconfig
     restart: always
     working_dir: /var/www/html
+    # ユーザー権限を追加
+    user: "0:0"  # root権限で実行

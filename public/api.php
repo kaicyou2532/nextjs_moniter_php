@@ -59,6 +59,10 @@ function restartNginx(): void {
 function GitPull(): bool {
     global $GitUrl;
     
+    // Git設定を追加（安全なディレクトリとして設定）
+    passthru('git config --global --add safe.directory /var/www/html/next-app 2>&1');
+    passthru('git config --global --add safe.directory "*" 2>&1');
+    
     // Next.jsディレクトリが存在しない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
         // 既存ディレクトリを削除
@@ -71,6 +75,8 @@ function GitPull(): bool {
         
         // 新しくクローン
         chdir(BASE_DIR);
+        
+        // ディレクトリの所有権を設定してからクローン
         passthru(sprintf(
             'git clone %s next-app 2>&1',
             escapeshellarg($repoUrl)
@@ -81,12 +87,18 @@ function GitPull(): bool {
             return false;
         }
         
+        // 所有権を修正
+        passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR), $chownCode);
+        
         echo "[OK]リポジトリをクローンしました\n";
         return true;
     }
     
     // 既存リポジトリの場合はpull
     chdir(NEXT_DIR);
+    
+    // 所有権を修正
+    passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR), $chownCode);
 
     // 環境変数で GITURL が指定されていれば origin を上書き
     if (!empty($GitUrl)) {
@@ -95,13 +107,23 @@ function GitPull(): bool {
             escapeshellarg($GitUrl)
         ), $code);
         if ($code !== 0) {
+            echo "[ERR]リモートURL設定失敗 (exit $code)\n";
             return false;
         }
     }
 
     // main ブランチを pull
     passthru('git pull origin main 2>&1', $code);
-    return ($code === 0);
+    
+    if ($code === 0) {
+        echo "[OK]最新版の取得が完了しました\n";
+        // pull後も所有権を修正
+        passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR));
+        return true;
+    } else {
+        echo "[ERR]git pull失敗 (exit $code)\n";
+        return false;
+    }
 }
 
 /**
