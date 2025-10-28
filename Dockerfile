@@ -25,9 +25,7 @@ RUN a2enmod rewrite
 COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
 
 # nginx設定
-COPY nginx.conf /etc/nginx/sites-available/default
-RUN rm -f /etc/nginx/sites-enabled/default && \
-    ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # supervisor設定
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -41,13 +39,15 @@ COPY . .
 # ディレクトリ作成と権限設定
 RUN mkdir -p logs pids \
     && chmod 755 logs pids \
-    && chown -R www-data:www-data /var/www/html
+    && chown -R www-data:www-data /var/www/html \
+    && chmod +x /var/www/html/public/*.php
 
 # ポート公開
 EXPOSE 80 3000
 
 # 環境変数
 ENV GITURL=""
+ENV DEBIAN_FRONTEND=noninteractive
 
-# 起動コマンド
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# デーモンモードでSupervisorを起動
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
