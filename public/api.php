@@ -76,7 +76,9 @@ function GitPull(): bool {
         // 新しくクローン
         chdir(BASE_DIR);
         
-        // ディレクトリの所有権を設定してからクローン
+        // ディレクトリの権限を設定してからクローン
+        passthru('mkdir -p next-app && chmod 777 next-app 2>&1');
+        
         passthru(sprintf(
             'git clone %s next-app 2>&1',
             escapeshellarg($repoUrl)

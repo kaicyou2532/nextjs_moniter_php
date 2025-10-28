@@ -13,6 +13,8 @@ services:
       - type: bind
         source: ./next-app
         target: /var/www/html/next-app
+        bind:
+          propagation: rshared
       - type: bind
         source: ./logs
         target: /var/www/html/logs
@@ -21,9 +23,7 @@ services:
         target: /var/www/html/pids
     environment:
       GITURL: "https://github.com/AIM-SC/next-website.git"
-      # Gitの安全なディレクトリ設定
-      GIT_CONFIG_GLOBAL: /tmp/.gitconfig
     restart: always
     working_dir: /var/www/html
-    # ユーザー権限を追加
-    user: "0:0"  # root権限で実行
+    user: "0:0"
+    privileged: true  # 権限問題を解決
