@@ -1,0 +1,4 @@
+# Docker用のGitignore追加設定
+.env
+docker-compose.override.yml
+*.log

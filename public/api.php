@@ -9,9 +9,19 @@ define('LOG_FILE', BASE_DIR . '/logs/nextjs.log');
 
 $GitUrl = getenv('GITURL');
 
-header('Content-Type: text/plain; charset=UTF-8');
 $data   = json_decode(file_get_contents('php://input'), true);
 $action = $data['action'] ?? '';
+
+// ストリーミングレスポンス用のヘッダー設定
+if (isset($data['stream']) && $data['stream'] === true) {
+    header('Content-Type: text/plain; charset=UTF-8');
+    header('Cache-Control: no-cache');
+    header('Connection: keep-alive');
+    ob_implicit_flush(true);
+    ob_end_flush();
+} else {
+    header('Content-Type: text/plain; charset=UTF-8');
+}
 
 /**
  * 現在のプロセスが起動中かどうかを判定
@@ -28,10 +38,19 @@ function isRunning(): bool {
  * nginx を再起動
  */
 function restartNginx(): void {
-    passthru('systemctl restart nginx 2>&1', $code);
-    echo ($code === 0)
-        ? "[OK] nginx を再起動しました\n"
-        : "[ERR] nginx の再起動に失敗しました (exit $code)\n";
+    // Dockerコンテナ内では supervisorctl を使用
+    if (file_exists('/usr/bin/supervisorctl')) {
+        passthru('supervisorctl restart nginx 2>&1', $code);
+        echo ($code === 0)
+            ? "[OK]リバースプロキシを再起動しました\n"
+            : "[ERR]リバースプロキシの再起動に失敗しました (exit $code)\n";
+    } else {
+        // 従来のsystemctl（ホスト環境用）
+        passthru('systemctl restart nginx 2>&1', $code);
+        echo ($code === 0)
+            ? "[OK]リバースプロキシを再起動しました\n"
+            : "[ERR]リバースプロキシの再起動に失敗しました (exit $code)\n";
+    }
 }
 
 /**
@@ -84,19 +103,117 @@ function tail(string $file, int $lines = 10): string {
     return $data;
 }
 
+/**
+ * コマンドをリアルタイム実行してログを出力
+ */
+function executeWithLiveOutput(string $command, string $workingDir = null): int {
+    if ($workingDir) {
+        chdir($workingDir);
+    }
+    
+    $descriptorspec = [
+        0 => ['pipe', 'r'],  // stdin
+        1 => ['pipe', 'w'],  // stdout
+        2 => ['pipe', 'w']   // stderr
+    ];
+    
+    $process = proc_open($command, $descriptorspec, $pipes);
+    
+    if (is_resource($process)) {
+        fclose($pipes[0]); // stdin を閉じる
+        
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        
+        while (true) {
+            $stdout = fgets($pipes[1]);
+            $stderr = fgets($pipes[2]);
+            
+            if ($stdout !== false) {
+                echo $stdout;
+                flush();
+            }
+            
+            if ($stderr !== false) {
+                echo $stderr;
+                flush();
+            }
+            
+            $status = proc_get_status($process);
+            if (!$status['running']) {
+                // プロセス終了後の残りの出力を読み取り
+                while (($stdout = fgets($pipes[1])) !== false) {
+                    echo $stdout;
+                    flush();
+                }
+                while (($stderr = fgets($pipes[2])) !== false) {
+                    echo $stderr;
+                    flush();
+                }
+                break;
+            }
+            
+            usleep(100000); // 0.1秒待機
+        }
+        
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        
+        $exitCode = proc_close($process);
+        return $exitCode;
+    }
+    
+    return -1;
+}
+
+// ストリーミング対応かどうか
+$isStreaming = isset($data['stream']) && $data['stream'] === true;
+
 // アクション判定
 switch ($action) {
     case 'build':
-        chdir(NEXT_DIR);
-        passthru('npm install 2>&1', $code);
-        echo ($code === 0)
-            ? "[OK] 依存関係インストール完了\n"
-            : "[ERR] 依存関係インストール失敗 (exit $code)\n";
+        if ($isStreaming) {
+            echo "=== 依存関係インストール開始 ===\n";
+            flush();
+            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            echo ($code === 0)
+                ? "\n[OK] 依存関係インストール完了\n"
+                : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
+            
+            if ($code === 0) {
+                echo "\n=== ビルド開始 ===\n";
+                flush();
+                $code = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
+                echo ($code === 0)
+                    ? "\n[OK] ビルド完了\n"
+                    : "\n[ERR] ビルド失敗 (exit $code)\n";
+            }
+            
+            if ($code === 0) {
+                echo "\n=== サーバー起動 ===\n";
+                flush();
+                $code = executeWithLiveOutput('npm run start 2>&1', NEXT_DIR);
+                echo ($code === 0)
+                    ? "\n[OK] スタート完了\n"
+                    : "\n[ERR] スタート失敗 (exit $code)\n";
+            }
+        } else {
+            chdir(NEXT_DIR);
+            passthru('npm install 2>&1', $code);
+            echo ($code === 0)
+                ? "[OK] 依存関係インストール完了\n"
+                : "[ERR] 依存関係インストール失敗 (exit $code)\n";
 
-        passthru('npm run build 2>&1', $code);
-        echo ($code === 0)
-            ? "[OK] ビルド完了\n"
-            : "[ERR] ビルド失敗 (exit $code)\n";
+            passthru('npm run build 2>&1', $code);
+            echo ($code === 0)
+                ? "[OK] ビルド完了\n"
+                : "[ERR] ビルド失敗 (exit $code)\n";
+
+            passthru('npm run start 2>&1', $code);
+            echo ($code === 0)
+                ? "[OK] スタート完了\n"
+                : "[ERR] スタート失敗 (exit $code)\n";
+        }
         break;
 
     case 'start':
@@ -116,21 +233,41 @@ switch ($action) {
         break;
 
     case 'dev':
-        chdir(NEXT_DIR);
-        // 依存関係インストール（必要に応じて）
-        passthru('npm install 2>&1', $code);
-        echo ($code === 0)
-            ? "[OK] 依存関係インストール完了\n"
-            : "[ERR] 依存関係インストール失敗 (exit $code)\n";
+        if ($isStreaming) {
+            echo "=== 依存関係インストール開始 ===\n";
+            flush();
+            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            echo ($code === 0)
+                ? "\n[OK] 依存関係インストール完了\n"
+                : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
+            
+            if ($code === 0) {
+                // 開発用サーバをバックグラウンドで起動
+                $cmd = sprintf(
+                    'nohup npm run dev > %s 2>&1 & echo $!',
+                    escapeshellarg(LOG_FILE)
+                );
+                $pid = shell_exec($cmd);
+                file_put_contents(PID_FILE, trim($pid));
+                echo "[OK] 開発サーバを起動しました (PID: " . trim($pid) . ")\n";
+            }
+        } else {
+            chdir(NEXT_DIR);
+            // 依存関係インストール（必要に応じて）
+            passthru('npm install 2>&1', $code);
+            echo ($code === 0)
+                ? "[OK] 依存関係インストール完了\n"
+                : "[ERR] 依存関係インストール失敗 (exit $code)\n";
 
-        // 開発用サーバをバックグラウンドで起動
-        $cmd = sprintf(
-            'nohup npm run dev > %s 2>&1 & echo $!',
-            escapeshellarg(LOG_FILE)
-        );
-        $pid = shell_exec($cmd);
-        file_put_contents(PID_FILE, trim($pid));
-        echo "[OK] 開発サーバを起動しました (PID: " . trim($pid) . ")\n";
+            // 開発用サーバをバックグラウンドで起動
+            $cmd = sprintf(
+                'nohup npm run dev > %s 2>&1 & echo $!',
+                escapeshellarg(LOG_FILE)
+            );
+            $pid = shell_exec($cmd);
+            file_put_contents(PID_FILE, trim($pid));
+            echo "[OK] 開発サーバを起動しました (PID: " . trim($pid) . ")\n";
+        }
         break;
 
     case 'stop':
@@ -180,6 +317,24 @@ switch ($action) {
         // nginx 再起動
         restartNginx();
         break;
+
+    case 'install':
+        if ($isStreaming) {
+            echo "=== 依存関係インストール開始 ===\n";
+            flush();
+            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            echo ($code === 0)
+                ? "\n[OK] 依存関係インストール完了\n"
+                : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
+        } else {
+            chdir(NEXT_DIR);
+            // npm install を実行
+            passthru('npm install 2>&1', $code);
+            echo ($code === 0)
+                ? "[OK] 依存関係インストール完了\n"
+                : "[ERR] 依存関係インストール失敗 (exit $code)\n";
+        }
+        break;    
 
     case 'Renewal':
         // Git リポジトリから最新版を取得

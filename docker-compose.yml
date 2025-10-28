@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  nextjs-monitor:
+    build: .
+    container_name: nextjs-monitor-php
+    ports:
+      - "8080:80"     # PHP管理ツール
+      - "3000:3000"   # Next.jsアプリ（nginxプロキシ経由）
+    volumes:
+      - ./next-app:/var/www/html/next-app
+      - ./logs:/var/www/html/logs
+      - ./pids:/var/www/html/pids
+    environment:
+      - GITURL=${GITURL:-}  # 環境変数から設定
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    # privileged: true  # Docker接続エラーを避けるため一時的に無効化

@@ -16,7 +16,10 @@ if (empty($_SERVER['PHP_AUTH_DIGEST'])) {
 
 // Digest ヘッダーのパース
 if (!($data = http_digest_parse($_SERVER['PHP_AUTH_DIGEST'])) || !isset($users[$data['username']])) {
-    exit('ユーザー名が不正です');
+    // 認証失敗時にブラウザに再認証を促す
+    header('HTTP/1.1 401 Unauthorized');
+    header('WWW-Authenticate: Digest realm="' . $realm . '",qop="auth",nonce="' . uniqid() . '",opaque="' . md5($realm) . '"');
+    exit('ユーザー名またはパスワードが正しくありません。もう一度お試しください。');
 }
 
 // 応答値の検証
@@ -31,7 +34,10 @@ $valid_response = md5(
     $A2
 );
 if ($data['response'] !== $valid_response) {
-    exit('Digest 認証に失敗しました');
+    // 認証失敗時にブラウザに再認証を促す
+    header('HTTP/1.1 401 Unauthorized');
+    header('WWW-Authenticate: Digest realm="' . $realm . '",qop="auth",nonce="' . uniqid() . '",opaque="' . md5($realm) . '"');
+    exit('パスワードが正しくありません。もう一度お試しください。');
 }
 
 // 認証成功後は何もしない（そのまま後続処理へ）
