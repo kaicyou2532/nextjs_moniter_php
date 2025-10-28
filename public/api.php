@@ -58,6 +58,34 @@ function restartNginx(): void {
  */
 function GitPull(): bool {
     global $GitUrl;
+    
+    // Next.jsディレクトリが存在しない場合はクローン
+    if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
+        // 既存ディレクトリを削除
+        if (is_dir(NEXT_DIR)) {
+            passthru('rm -rf ' . escapeshellarg(NEXT_DIR), $code);
+        }
+        
+        // GitURLまたはデフォルトURLを使用
+        $repoUrl = !empty($GitUrl) ? $GitUrl : 'https://github.com/AIM-SC/next-website.git';
+        
+        // 新しくクローン
+        chdir(BASE_DIR);
+        passthru(sprintf(
+            'git clone %s next-app 2>&1',
+            escapeshellarg($repoUrl)
+        ), $code);
+        
+        if ($code !== 0) {
+            echo "[ERR]リポジトリのクローンに失敗しました (exit $code)\n";
+            return false;
+        }
+        
+        echo "[OK]リポジトリをクローンしました\n";
+        return true;
+    }
+    
+    // 既存リポジトリの場合はpull
     chdir(NEXT_DIR);
 
     // 環境変数で GITURL が指定されていれば origin を上書き
@@ -172,6 +200,12 @@ $isStreaming = isset($data['stream']) && $data['stream'] === true;
 // アクション判定
 switch ($action) {
     case 'build':
+        // Next.jsディレクトリの存在確認
+        if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            break;
+        }
+        
         if ($isStreaming) {
             echo "=== 依存関係インストール開始 ===\n";
             flush();
@@ -337,12 +371,12 @@ switch ($action) {
         break;    
 
     case 'Renewal':
-        // Git リポジトリから最新版を取得
-        if (!GitPull()) {
-            echo "[WARN] GitHub リポジトリから最新版を取得できませんでした。\n";
-            break;
+        echo "=== GitHubから最新版を取得 ===\n";
+        if (GitPull()) {
+            echo "[OK]最新版の取得が完了しました\n";
+        } else {
+            echo "[ERR]最新版の取得に失敗しました\n";
         }
-        echo "[OK] リポジトリを更新しました\n";
         break;
 
     default:

@@ -1,22 +1,25 @@
-version: '3.8'
+version: '3.3'
 
 services:
   nextjs-monitor:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nextjs-monitor-php
+    container_name: nextjs-monitor-php-new
     ports:
-      - "8080:80"     # PHP管理ツール
-      - "3000:3000"   # Next.jsアプリ（nginxプロキシ経由）
+      - "8080:80"
+      - "3000:3000"
     volumes:
-      - ./next-app:/var/www/html/next-app:rw
-      - ./logs:/var/www/html/logs:rw
-      - ./pids:/var/www/html/pids:rw
+      - type: bind
+        source: ./next-app
+        target: /var/www/html/next-app
+      - type: bind
+        source: ./logs
+        target: /var/www/html/logs
+      - type: bind
+        source: ./pids
+        target: /var/www/html/pids
     environment:
-      - GITURL=${GITURL:-}
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
-    # 権限設定を追加
-    user: "0:0"  # root権限で実行
+      GITURL: ""
+    restart: always
+    working_dir: /var/www/html
