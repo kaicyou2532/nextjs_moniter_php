@@ -27,6 +27,11 @@ RUN docker-php-ext-install pcntl posix
 RUN git config --global --add safe.directory /var/www/html/next-app && \
     git config --global --add safe.directory '*'
 
+# npm権限設定
+RUN mkdir -p /var/www/.npm && \
+    chown -R www-data:www-data /var/www/.npm && \
+    chmod -R 755 /var/www/.npm
+
 # Apache設定
 RUN a2enmod rewrite
 COPY apache-config.conf /etc/apache2/sites-available/000-default.conf
@@ -48,6 +53,9 @@ COPY . /var/www/html/
 RUN mkdir -p logs pids next-app && \
     chmod -R 755 logs pids next-app && \
     chown -R www-data:www-data /var/www/html
+
+# npm関連の権限設定
+RUN chown -R www-data:www-data /var/www/.npm /usr/lib/node_modules || true
 
 # ポートを公開
 EXPOSE 80 3000

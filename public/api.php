@@ -17,8 +17,13 @@ if (isset($data['stream']) && $data['stream'] === true) {
     header('Content-Type: text/plain; charset=UTF-8');
     header('Cache-Control: no-cache');
     header('Connection: keep-alive');
+    
+    // バッファがある場合のみ削除
+    while (ob_get_level()) {
+        ob_end_flush();
+    }
+    
     ob_implicit_flush(true);
-    ob_end_flush();
 } else {
     header('Content-Type: text/plain; charset=UTF-8');
 }
@@ -231,9 +236,14 @@ switch ($action) {
         }
         
         if ($isStreaming) {
+            echo "=== npm権限修正 ===\n";
+            flush();
+            passthru('chown -R www-data:www-data /var/www/.npm 2>/dev/null || true');
+            passthru('mkdir -p /var/www/.npm && chown -R www-data:www-data /var/www/.npm');
+            
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput('npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
@@ -377,20 +387,23 @@ switch ($action) {
         break;
 
     case 'install':
+        // Next.jsディレクトリの存在確認
+        if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            break;
+        }
+        
         if ($isStreaming) {
+            echo "=== npm権限修正 ===\n";
+            flush();
+            passthru('mkdir -p /tmp/.npm && chown -R www-data:www-data /tmp/.npm');
+            
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput('npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
-        } else {
-            chdir(NEXT_DIR);
-            // npm install を実行
-            passthru('npm install 2>&1', $code);
-            echo ($code === 0)
-                ? "[OK] 依存関係インストール完了\n"
-                : "[ERR] 依存関係インストール失敗 (exit $code)\n";
         }
         break;    
 
