@@ -64,6 +64,9 @@ function restartNginx(): void {
 function GitPull(): bool {
     global $GitUrl;
     
+    // 環境変数設定
+    putenv('HOME=/root');
+    
     // Git設定を追加（安全なディレクトリとして設定）
     passthru('git config --global --add safe.directory /var/www/html/next-app 2>&1');
     passthru('git config --global --add safe.directory "*" 2>&1');
@@ -85,7 +88,7 @@ function GitPull(): bool {
         passthru('mkdir -p next-app && chmod 777 next-app 2>&1');
         
         passthru(sprintf(
-            'git clone %s next-app 2>&1',
+            'HOME=/root git clone %s next-app 2>&1',
             escapeshellarg($repoUrl)
         ), $code);
         
@@ -110,7 +113,7 @@ function GitPull(): bool {
     // 環境変数で GITURL が指定されていれば origin を上書き
     if (!empty($GitUrl)) {
         passthru(sprintf(
-            'git remote set-url origin %s 2>&1',
+            'HOME=/root git remote set-url origin %s 2>&1',
             escapeshellarg($GitUrl)
         ), $code);
         if ($code !== 0) {
@@ -120,7 +123,7 @@ function GitPull(): bool {
     }
 
     // main ブランチを pull
-    passthru('git pull origin main 2>&1', $code);
+    passthru('HOME=/root git pull origin main 2>&1', $code);
     
     if ($code === 0) {
         echo "[OK]最新版の取得が完了しました\n";

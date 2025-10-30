@@ -3,6 +3,8 @@ FROM php:8.3-apache
 
 # 環境変数設定
 ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/root
+ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 # 基本パッケージのインストール
 RUN apt-get update && \
@@ -23,14 +25,16 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # PHP拡張のインストール
 RUN docker-php-ext-install pcntl posix
 
-# Git設定（安全なディレクトリとして追加）
-RUN git config --global --add safe.directory /var/www/html/next-app && \
-    git config --global --add safe.directory '*'
+# Git設定（グローバル設定）
+RUN git config --global --add safe.directory '*' && \
+    git config --global init.defaultBranch main && \
+    git config --global user.email "docker@example.com" && \
+    git config --global user.name "Docker User"
 
 # npm権限設定
-RUN mkdir -p /var/www/.npm && \
-    chown -R www-data:www-data /var/www/.npm && \
-    chmod -R 755 /var/www/.npm
+RUN mkdir -p /tmp/.npm /var/www/.npm && \
+    chown -R www-data:www-data /tmp/.npm /var/www/.npm && \
+    chmod -R 755 /tmp/.npm /var/www/.npm
 
 # Apache設定
 RUN a2enmod rewrite
@@ -53,9 +57,6 @@ COPY . /var/www/html/
 RUN mkdir -p logs pids next-app && \
     chmod -R 755 logs pids next-app && \
     chown -R www-data:www-data /var/www/html
-
-# npm関連の権限設定
-RUN chown -R www-data:www-data /var/www/.npm /usr/lib/node_modules || true
 
 # ポートを公開
 EXPOSE 80 3000

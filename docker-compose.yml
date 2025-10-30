@@ -22,8 +22,10 @@ services:
         source: ./pids
         target: /var/www/html/pids
     environment:
-      GITURL: "https://github.com/AIM-SC/next-website.git"
+      - GITURL=https://github.com/AIM-SC/next-website.git
+      - HOME=/root
+      - NPM_CONFIG_CACHE=/tmp/.npm
     restart: always
     working_dir: /var/www/html
     user: "0:0"
-    privileged: true  # 権限問題を解決
+    privileged: true
