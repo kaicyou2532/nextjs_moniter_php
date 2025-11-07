@@ -487,10 +487,27 @@ switch ($action) {
                     // 起動確認
                     sleep(3);
                     $pid = file_exists(PID_FILE) ? trim(file_get_contents(PID_FILE)) : '';
+                    
+                    // PIDファイルでの確認
                     if ($pid && posix_kill((int)$pid, 0)) {
                         echo "[OK] プロセス確認完了 (PID: $pid)\n";
                     } else {
-                        echo "[WARN] プロセス確認に失敗しました\n";
+                        echo "[WARN] PIDファイルでのプロセス確認に失敗\n";
+                        
+                        // 別の方法でNext.jsプロセスを確認
+                        echo "[INFO] Next.jsプロセスを検索中...\n";
+                        $nodeProcesses = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep');
+                        if (!empty($nodeProcesses)) {
+                            echo "[OK] Next.jsプロセス発見:\n";
+                            echo $nodeProcesses . "\n";
+                        } else {
+                            echo "[ERR] Next.jsプロセスが見つかりません\n";
+                        }
+                        
+                        // ポート3000の使用状況確認
+                        echo "[INFO] ポート3000の使用状況:\n";
+                        $portCheck = shell_exec('netstat -tlnp | grep :3000 2>/dev/null || echo "ポート3000は使用されていません"');
+                        echo $portCheck . "\n";
                     }
                 } else {
                     echo "[ERR] バックグラウンド起動に失敗しました\n";
