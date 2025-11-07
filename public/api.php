@@ -353,6 +353,10 @@ switch ($action) {
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
             
             if ($code === 0) {
+                echo "\n=== 環境変数設定 ===\n";
+                flush();
+                createNextJsEnvFile();
+                
                 echo "\n=== ビルド開始 ===\n";
                 flush();
                 $code = executeWithLiveOutput('HOME=/root npm run build 2>&1', NEXT_DIR);
@@ -365,27 +369,55 @@ switch ($action) {
                 echo "\n=== サーバー起動（ポート3000） ===\n";
                 flush();
                 
+                // 既存のプロセスがあれば停止
+                killPort3000Processes();
+                
                 // バックグラウンドでNext.jsを起動
                 if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
                     echo "[OK] Next.jsアプリをポート3000で起動しました\n";
                     echo "[INFO] http://localhost:3000でアクセス可能です\n";
+                    echo "[INFO] nginx経由でhttp://localhost:3000でもアクセス可能です\n";
+                    
+                    // 起動確認
+                    sleep(3);
+                    $pid = file_exists(PID_FILE) ? trim(file_get_contents(PID_FILE)) : '';
+                    if ($pid && posix_kill((int)$pid, 0)) {
+                        echo "[OK] プロセス確認完了 (PID: $pid)\n";
+                    } else {
+                        echo "[WARN] プロセス確認に失敗しました\n";
+                    }
                 } else {
                     echo "[ERR] バックグラウンド起動に失敗しました\n";
                 }
             }
         } else {
+            // 環境変数ファイル作成
+            createNextJsEnvFile();
+            
             chdir(NEXT_DIR);
             passthru('npm install 2>&1', $code);
             echo ($code === 0)
                 ? "[OK] 依存関係インストール完了\n"
                 : "[ERR] 依存関係インストール失敗 (exit $code)\n";
 
-            passthru('npm run build 2>&1', $code);
-            echo ($code === 0)
-                ? "[OK] ビルド完了\n"
-                : "[ERR] ビルド失敗 (exit $code)\n";
+            if ($code === 0) {
+                passthru('npm run build 2>&1', $code);
+                echo ($code === 0)
+                    ? "[OK] ビルド完了\n"
+                    : "[ERR] ビルド失敗 (exit $code)\n";
+            }
 
-            passthru('npm run start 2>&1', $code);
+            if ($code === 0) {
+                // 既存のプロセスを停止
+                killPort3000Processes();
+                
+                // バックグラウンドでNext.jsを起動
+                if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
+                    echo "[OK] Next.jsアプリをポート3000で起動しました\n";
+                } else {
+                    echo "[ERR] バックグラウンド起動に失敗しました\n";
+                }
+            }
             echo ($code === 0)
                 ? "[OK] スタート完了\n"
                 : "[ERR] スタート失敗 (exit $code)\n";
