@@ -8,7 +8,8 @@ services:
     container_name: nextjs-monitor-php-new
     ports:
       - "8080:8080"   # PHP管理ツール（Apache）
-      - "3000:80"     # Next.jsアプリ（nginx）
+      - "80:80"       # Next.jsアプリ（nginx）
+      - "3000:3000"   # Next.js直接アクセス用（オプション）
     volumes:
       # ローカルマウント方式（パーミッション問題がある場合はコメントアウト）
       # - ./next-app:/var/www/html/next-app

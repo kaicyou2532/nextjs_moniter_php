@@ -43,14 +43,33 @@ function isRunning(): bool {
  * nginx を再起動
  */
 function restartNginx(): void {
+    echo "[INFO]nginx設定をテスト中...\n";
+    
+    // nginx設定テスト
+    passthru('nginx -t 2>&1', $testCode);
+    if ($testCode !== 0) {
+        echo "[ERR]nginx設定にエラーがあります\n";
+        return;
+    }
+    
+    echo "[OK]nginx設定テスト成功\n";
+    
     // Dockerコンテナ内では supervisorctl を使用
     if (file_exists('/usr/bin/supervisorctl')) {
+        echo "[INFO]supervisorctlでnginxを再起動中...\n";
         passthru('supervisorctl restart nginx 2>&1', $code);
         echo ($code === 0)
             ? "[OK]リバースプロキシを再起動しました\n"
             : "[ERR]リバースプロキシの再起動に失敗しました (exit $code)\n";
+            
+        // 再起動後の状態確認
+        if ($code === 0) {
+            sleep(2);
+            passthru('supervisorctl status nginx 2>&1');
+        }
     } else {
         // 従来のsystemctl（ホスト環境用）
+        echo "[INFO]systemctlでnginxを再起動中...\n";
         passthru('systemctl restart nginx 2>&1', $code);
         echo ($code === 0)
             ? "[OK]リバースプロキシを再起動しました\n"
