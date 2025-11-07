@@ -77,8 +77,9 @@ function GitPull(): bool {
     
     // Next.jsディレクトリが存在しない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
-        // 既存ディレクトリを完全削除
+        // 既存ディレクトリを完全削除（権限修正してから）
         if (is_dir(NEXT_DIR)) {
+            passthru('chmod -R 777 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
             passthru('rm -rf ' . escapeshellarg(NEXT_DIR), $code);
         }
         
@@ -244,19 +245,32 @@ function killPort3000Processes(): void {
  */
 function createNextJsEnvFile() {
     $envPath = "/var/www/html/next-app/.env.local";
+    $envBackupPath = "/var/www/html/env-backup.txt";
     
-    // 環境変数の内容
-    $envContent = "# Next.js Environment Variables\n";
-    $envContent .= "NEXT_PUBLIC_API_URL=http://localhost:3000\n";
-    $envContent .= "NEXT_PUBLIC_SITE_NAME=NextJS Monitor\n";
-    $envContent .= "NODE_ENV=production\n";
-    $envContent .= "\n# MicroCMS Settings (必要に応じて設定)\n";
-    $envContent .= "# MICROCMS_SERVICE_DOMAIN=your-domain\n";
-    $envContent .= "# MICROCMS_API_KEY=your-api-key\n";
+    // バックアップファイルから環境変数を復元
+    if (file_exists($envBackupPath)) {
+        echo "[INFO]バックアップから環境変数を復元中...\n";
+        $envContent = file_get_contents($envBackupPath);
+    } else {
+        // デフォルトの環境変数の内容
+        $envContent = "# Next.js Environment Variables\n";
+        $envContent .= "NEXT_PUBLIC_API_URL=http://localhost:3000\n";
+        $envContent .= "NEXT_PUBLIC_SITE_NAME=NextJS Monitor\n";
+        $envContent .= "NODE_ENV=production\n";
+        $envContent .= "\n# MicroCMS Settings\n";
+        $envContent .= "MICROCMS_SERVICE_DOMAIN=learning-commons\n";
+        $envContent .= "MICROCMS_API_KEY=hwlujpRx3BOkB4NZFWjISIYiMfC74TElWntX\n";
+        $envContent .= "MICROCMS_PREVIEW_SECRET=B422learning-commons\n";
+        $envContent .= "\n# Google Analytics\n";
+        $envContent .= "GA_ID=G-CL0J962CGY\n";
+    }
     
     // ファイルを作成
     if (file_put_contents($envPath, $envContent)) {
         echo "[OK].env.localファイルを作成しました\n";
+        
+        // 環境変数をバックアップに保存
+        file_put_contents($envBackupPath, $envContent);
         
         // パーミッション設定
         chmod($envPath, 0644);
