@@ -66,22 +66,41 @@ function GitPull(): bool {
     
     // 環境変数とGit設定
     putenv('HOME=/root');
+    putenv('GIT_CONFIG_GLOBAL=/root/.gitconfig');
     
     // Gitconfig権限修正
     passthru('mkdir -p /root/.config/git 2>/dev/null || true');
+    passthru('mkdir -p /root/.ssh 2>/dev/null || true');
     passthru('touch /root/.gitconfig && chmod 644 /root/.gitconfig 2>/dev/null || true');
     
     // Git設定を追加（安全なディレクトリとして設定）
     passthru('git config --global --add safe.directory /var/www/html/next-app 2>/dev/null || true');
     passthru('git config --global --add safe.directory "*" 2>/dev/null || true');
+    passthru('git config --global init.defaultBranch main 2>/dev/null || true');
+    
+    // プロセス権限を確認
+    echo "[INFO]現在のユーザー: " . trim(shell_exec('whoami')) . "\n";
+    echo "[INFO]作業ディレクトリ: " . getcwd() . "\n";
     
     // Next.jsディレクトリが存在しない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
-        // 既存ディレクトリを完全削除（権限修正してから）
+        // 既存ディレクトリを完全削除（強力な権限修正）
         if (is_dir(NEXT_DIR)) {
+            echo "[INFO]既存ディレクトリを削除中...\n";
             passthru('chmod -R 777 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
+            passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
             passthru('rm -rf ' . escapeshellarg(NEXT_DIR), $code);
+            
+            // 削除確認
+            if (is_dir(NEXT_DIR)) {
+                echo "[WARN]ディレクトリ削除に失敗。強制削除を試行中...\n";
+                passthru('sudo rm -rf ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
+            }
         }
+        
+        // 親ディレクトリの権限確認
+        passthru('chmod 755 ' . escapeshellarg(BASE_DIR) . ' 2>/dev/null || true');
+        passthru('chown root:root ' . escapeshellarg(BASE_DIR) . ' 2>/dev/null || true');
         
         // GitURLまたはデフォルトURLを使用
         $repoUrl = !empty($GitUrl) ? $GitUrl : 'https://github.com/AIM-SC/next-website.git';
@@ -91,13 +110,34 @@ function GitPull(): bool {
         
         echo "[INFO]リポジトリをクローン中...\n";
         passthru(sprintf(
-            'HOME=/root git clone %s next-app 2>&1',
+            'HOME=/root GIT_CONFIG_GLOBAL=/root/.gitconfig git clone %s next-app 2>&1',
             escapeshellarg($repoUrl)
         ), $code);
         
         if ($code !== 0) {
             echo "[ERR]リポジトリのクローンに失敗しました (exit $code)\n";
-            return false;
+            echo "[INFO]別の方法でクローンを試行中...\n";
+            
+            // 代替方法：wgetでダウンロード
+            passthru('mkdir -p ' . escapeshellarg(NEXT_DIR));
+            passthru(sprintf(
+                'cd %s && curl -L https://github.com/AIM-SC/next-website/archive/refs/heads/main.zip -o main.zip && unzip -q main.zip && mv next-website-main/* . && rm -rf next-website-main main.zip 2>&1',
+                escapeshellarg(NEXT_DIR)
+            ), $altCode);
+            
+            if ($altCode === 0) {
+                echo "[OK]アーカイブダウンロードでリポジトリを取得しました\n";
+                // Git初期化
+                passthru(sprintf(
+                    'cd %s && git init && git remote add origin %s 2>&1',
+                    escapeshellarg(NEXT_DIR),
+                    escapeshellarg($repoUrl)
+                ));
+                $code = 0; // 成功扱い
+            } else {
+                echo "[ERR]代替方法も失敗しました\n";
+                return false;
+            }
         }
         
         // 所有権とディレクトリ権限を修正
@@ -594,6 +634,12 @@ switch ($action) {
         break;
 
     case 'env':
+        // Next.jsディレクトリの存在確認
+        if (!is_dir(NEXT_DIR)) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            break;
+        }
+        
         // 環境変数ファイル作成
         if (createNextJsEnvFile()) {
             echo "[OK] 環境変数ファイルを作成しました\n";
