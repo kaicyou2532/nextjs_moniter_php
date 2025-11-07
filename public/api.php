@@ -353,17 +353,38 @@ function createNextJsEnvFile() {
 function startInBackground(string $command, string $workingDir = null): bool {
     if ($workingDir) {
         chdir($workingDir);
+        echo "[INFO] 作業ディレクトリ: " . getcwd() . "\n";
     }
+    
+    echo "[INFO] 実行コマンド: $command\n";
     
     // バックグラウンドで実行
     $fullCommand = "nohup $command > " . LOG_FILE . " 2>&1 & echo $!";
     $pid = trim(shell_exec($fullCommand));
     
+    echo "[INFO] 取得したPID: $pid\n";
+    
     if ($pid && is_numeric($pid)) {
         file_put_contents(PID_FILE, $pid);
-        return true;
+        
+        // プロセスが実際に開始されたか確認
+        sleep(2);
+        if (posix_kill((int)$pid, 0)) {
+            echo "[OK] プロセス開始確認 (PID: $pid)\n";
+            return true;
+        } else {
+            echo "[WARN] PID $pid のプロセスが見つかりません\n";
+            
+            // 代替確認方法
+            $nodeCheck = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep | head -1');
+            if (!empty($nodeCheck)) {
+                echo "[INFO] Next.jsプロセス検出: " . trim($nodeCheck) . "\n";
+                return true;
+            }
+        }
     }
     
+    echo "[ERR] プロセス開始に失敗しました\n";
     return false;
 }
 
@@ -658,12 +679,44 @@ switch ($action) {
         break;
 
     case 'status':
+        echo "=== Next.js アプリ状態確認 ===\n";
+        
+        // PIDファイル確認
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
-            echo "[RUNNING] PID: $pid\n";
+            echo "[PIDファイル] RUNNING - PID: $pid\n";
         } else {
-            echo "[STOPPED]\n";
+            echo "[PIDファイル] STOPPED\n";
         }
+        
+        // プロセス確認
+        echo "\n-- プロセス検索 --\n";
+        $nodeProcesses = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep');
+        if (!empty($nodeProcesses)) {
+            echo "[プロセス] Next.js関連プロセス発見:\n";
+            echo $nodeProcesses . "\n";
+        } else {
+            echo "[プロセス] Next.js関連プロセスなし\n";
+        }
+        
+        // ポート使用状況確認
+        echo "\n-- ポート使用状況 --\n";
+        $portCheck = shell_exec('netstat -tlnp | grep :3000 2>/dev/null');
+        if (!empty($portCheck)) {
+            echo "[ポート3000] 使用中:\n" . $portCheck . "\n";
+        } else {
+            echo "[ポート3000] 使用されていません\n";
+        }
+        
+        // アクセステスト
+        echo "\n-- アクセステスト --\n";
+        $curlTest = shell_exec('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null');
+        if ($curlTest == '200') {
+            echo "[アクセス] OK - Next.jsアプリは正常に動作中\n";
+        } else {
+            echo "[アクセス] NG - HTTPレスポンス: $curlTest\n";
+        }
+        
         echo "\n-- 最新ログ --\n";
         echo file_exists(LOG_FILE)
             ? tail(LOG_FILE, 20)
@@ -724,6 +777,33 @@ switch ($action) {
             echo "[OK]最新版の取得が完了しました\n";
         } else {
             echo "[ERR]最新版の取得に失敗しました\n";
+        }
+        break;
+
+    case 'port80check':
+        // ポート80の使用状況確認
+        echo "=== ポート80使用状況確認 ===\n";
+        
+        // Dockerコンテナ内のポート80確認
+        echo "[INFO] コンテナ内のポート80確認:\n";
+        $containerPort80 = shell_exec('ss -tlnp | grep :80 2>/dev/null || netstat -tlnp | grep :80 2>/dev/null || echo "コンテナ内でポート80は使用されていません"');
+        echo $containerPort80 . "\n";
+        
+        // nginxプロセス確認
+        echo "[INFO] nginxプロセス確認:\n";
+        $nginxProcesses = shell_exec('ps aux | grep nginx | grep -v grep');
+        if (!empty($nginxProcesses)) {
+            echo $nginxProcesses . "\n";
+        } else {
+            echo "nginxプロセスが見つかりません\n";
+        }
+        
+        // supervisor状態確認
+        echo "[INFO] supervisor状態確認:\n";
+        if (file_exists('/usr/bin/supervisorctl')) {
+            passthru('supervisorctl status');
+        } else {
+            echo "supervisorctlが見つかりません\n";
         }
         break;
 
