@@ -7,8 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: nextjs-monitor-php-new
     ports:
-      - "8080:80"
-      - "3000:3000"
+      - "8080:8080"   # PHP管理ツール（Apache）
+      - "3000:80"     # Next.jsアプリ（nginx）
     volumes:
       - ./next-app:/var/www/html/next-app
       - ./logs:/var/www/html/logs

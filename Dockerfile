@@ -25,8 +25,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # PHP拡張のインストール
 RUN docker-php-ext-install pcntl posix
 
-# Git設定（グローバル設定）
-RUN git config --global --add safe.directory '*' && \
+# Git設定（グローバル設定とrootディレクトリ作成）
+RUN mkdir -p /root/.config/git && \
+    touch /root/.gitconfig && \
+    chmod 644 /root/.gitconfig && \
+    chown root:root /root/.gitconfig && \
+    git config --global --add safe.directory '*' && \
     git config --global init.defaultBranch main && \
     git config --global user.email "docker@example.com" && \
     git config --global user.name "Docker User"
@@ -35,6 +39,10 @@ RUN git config --global --add safe.directory '*' && \
 RUN mkdir -p /tmp/.npm /var/www/.npm && \
     chown -R www-data:www-data /tmp/.npm /var/www/.npm && \
     chmod -R 755 /tmp/.npm /var/www/.npm
+
+# Apacheポート設定（8080に変更）
+RUN sed -i 's/80/8080/g' /etc/apache2/ports.conf
+RUN sed -i 's/:80/:8080/g' /etc/apache2/sites-available/000-default.conf
 
 # Apache設定
 RUN a2enmod rewrite
@@ -60,7 +68,7 @@ RUN mkdir -p logs pids next-app && \
     chown -R www-data:www-data /var/www/html
 
 # ポートを公開
-EXPOSE 80 3000
+EXPOSE 8080 80
 
 # Supervisorで起動
 CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

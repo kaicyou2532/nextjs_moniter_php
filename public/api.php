@@ -64,16 +64,20 @@ function restartNginx(): void {
 function GitPull(): bool {
     global $GitUrl;
     
-    // 環境変数設定
+    // 環境変数とGit設定
     putenv('HOME=/root');
     
+    // Gitconfig権限修正
+    passthru('mkdir -p /root/.config/git 2>/dev/null || true');
+    passthru('touch /root/.gitconfig && chmod 644 /root/.gitconfig 2>/dev/null || true');
+    
     // Git設定を追加（安全なディレクトリとして設定）
-    passthru('git config --global --add safe.directory /var/www/html/next-app 2>&1');
-    passthru('git config --global --add safe.directory "*" 2>&1');
+    passthru('git config --global --add safe.directory /var/www/html/next-app 2>/dev/null || true');
+    passthru('git config --global --add safe.directory "*" 2>/dev/null || true');
     
     // Next.jsディレクトリが存在しない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
-        // 既存ディレクトリを削除
+        // 既存ディレクトリを完全削除
         if (is_dir(NEXT_DIR)) {
             passthru('rm -rf ' . escapeshellarg(NEXT_DIR), $code);
         }
@@ -81,12 +85,10 @@ function GitPull(): bool {
         // GitURLまたはデフォルトURLを使用
         $repoUrl = !empty($GitUrl) ? $GitUrl : 'https://github.com/AIM-SC/next-website.git';
         
-        // 新しくクローン
+        // 新しくクローン（rootユーザーで実行）
         chdir(BASE_DIR);
         
-        // ディレクトリの権限を設定してからクローン
-        passthru('mkdir -p next-app && chmod 777 next-app 2>&1');
-        
+        echo "[INFO]リポジトリをクローン中...\n";
         passthru(sprintf(
             'HOME=/root git clone %s next-app 2>&1',
             escapeshellarg($repoUrl)
@@ -97,8 +99,9 @@ function GitPull(): bool {
             return false;
         }
         
-        // 所有権を修正
-        passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR), $chownCode);
+        // 所有権とディレクトリ権限を修正
+        passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR), $chmodCode);
+        passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR), $chownCode);
         
         echo "[OK]リポジトリをクローンしました\n";
         return true;
@@ -107,8 +110,9 @@ function GitPull(): bool {
     // 既存リポジトリの場合はpull
     chdir(NEXT_DIR);
     
-    // 所有権を修正
-    passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR), $chownCode);
+    // 所有権とディレクトリ権限を修正
+    passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR), $chmodCode);
+    passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR), $chownCode);
 
     // 環境変数で GITURL が指定されていれば origin を上書き
     if (!empty($GitUrl)) {
@@ -123,12 +127,14 @@ function GitPull(): bool {
     }
 
     // main ブランチを pull
+    echo "[INFO]最新版を取得中...\n";
     passthru('HOME=/root git pull origin main 2>&1', $code);
     
     if ($code === 0) {
         echo "[OK]最新版の取得が完了しました\n";
         // pull後も所有権を修正
-        passthru('chown -R www-data:www-data ' . escapeshellarg(NEXT_DIR));
+        passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR));
+        passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR));
         return true;
     } else {
         echo "[ERR]git pull失敗 (exit $code)\n";
