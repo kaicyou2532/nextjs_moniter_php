@@ -164,6 +164,66 @@ function tail(string $file, int $lines = 10): string {
 }
 
 /**
+ * ポート3000を使用しているプロセスを停止
+ */
+function killPort3000Processes(): void {
+    echo "=== ポート3000使用中のプロセスを停止 ===\n";
+    flush();
+    
+    // ポート3000を使用しているプロセスを検索
+    $output = shell_exec('lsof -ti:3000 2>/dev/null || netstat -tlnp 2>/dev/null | grep :3000 | awk \'{print $7}\' | cut -d/ -f1 2>/dev/null || ss -tlnp 2>/dev/null | grep :3000 | grep -o "pid=[0-9]*" | cut -d= -f2 2>/dev/null');
+    
+    if (!empty($output)) {
+        $pids = array_filter(explode("\n", trim($output)));
+        foreach ($pids as $pid) {
+            $pid = trim($pid);
+            if (is_numeric($pid) && $pid > 0) {
+                echo "[INFO] ポート3000使用中のプロセス PID: $pid を停止します\n";
+                posix_kill((int)$pid, SIGTERM);
+                sleep(1);
+                // SIGTERMで停止しない場合はSIGKILL
+                if (posix_kill((int)$pid, 0)) {
+                    posix_kill((int)$pid, SIGKILL);
+                    echo "[INFO] 強制停止しました (PID: $pid)\n";
+                } else {
+                    echo "[OK] プロセスを停止しました (PID: $pid)\n";
+                }
+            }
+        }
+    } else {
+        echo "[INFO] ポート3000を使用中のプロセスはありません\n";
+    }
+    
+    // Nodeプロセスも確認して停止
+    passthru('pkill -f "node.*3000" 2>/dev/null || true');
+    passthru('pkill -f "next.*start" 2>/dev/null || true');
+    passthru('pkill -f "next.*dev" 2>/dev/null || true');
+    echo "[OK] Node.js関連プロセスをクリーンアップしました\n";
+    
+    flush();
+}
+
+/**
+ * コマンドをバックグラウンドで実行してPIDを保存
+ */
+function startInBackground(string $command, string $workingDir = null): bool {
+    if ($workingDir) {
+        chdir($workingDir);
+    }
+    
+    // バックグラウンドで実行
+    $fullCommand = "nohup $command > " . LOG_FILE . " 2>&1 & echo $!";
+    $pid = trim(shell_exec($fullCommand));
+    
+    if ($pid && is_numeric($pid)) {
+        file_put_contents(PID_FILE, $pid);
+        return true;
+    }
+    
+    return false;
+}
+
+/**
  * コマンドをリアルタイム実行してログを出力
  */
 function executeWithLiveOutput(string $command, string $workingDir = null): int {
@@ -239,14 +299,17 @@ switch ($action) {
         }
         
         if ($isStreaming) {
+            // ポート3000のプロセスを自動停止
+            killPort3000Processes();
+            
             echo "=== npm権限修正 ===\n";
             flush();
             passthru('chown -R www-data:www-data /var/www/.npm 2>/dev/null || true');
-            passthru('mkdir -p /var/www/.npm && chown -R www-data:www-data /var/www/.npm');
+            passthru('mkdir -p /tmp/.npm && chown -R www-data:www-data /tmp/.npm');
             
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
@@ -254,19 +317,23 @@ switch ($action) {
             if ($code === 0) {
                 echo "\n=== ビルド開始 ===\n";
                 flush();
-                $code = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
+                $code = executeWithLiveOutput('HOME=/root npm run build 2>&1', NEXT_DIR);
                 echo ($code === 0)
                     ? "\n[OK] ビルド完了\n"
                     : "\n[ERR] ビルド失敗 (exit $code)\n";
             }
             
             if ($code === 0) {
-                echo "\n=== サーバー起動 ===\n";
+                echo "\n=== サーバー起動（ポート3000） ===\n";
                 flush();
-                $code = executeWithLiveOutput('npm run start 2>&1', NEXT_DIR);
-                echo ($code === 0)
-                    ? "\n[OK] スタート完了\n"
-                    : "\n[ERR] スタート失敗 (exit $code)\n";
+                
+                // バックグラウンドでNext.jsを起動
+                if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
+                    echo "[OK] Next.jsアプリをポート3000で起動しました\n";
+                    echo "[INFO] http://localhost:3000でアクセス可能です\n";
+                } else {
+                    echo "[ERR] バックグラウンド起動に失敗しました\n";
+                }
             }
         } else {
             chdir(NEXT_DIR);
@@ -288,39 +355,54 @@ switch ($action) {
         break;
 
     case 'start':
-        if (isRunning()) {
-            echo "[WARN] すでに起動中です\n";
+        // Next.jsディレクトリの存在確認
+        if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
             break;
         }
-        chdir(NEXT_DIR);
-        // nohup でバックグラウンド起動し、PID を保存
-        $cmd = sprintf(
-            'nohup npm run start > %s 2>&1 & echo $!',
-            escapeshellarg(LOG_FILE)
-        );
-        $pid = shell_exec($cmd);
-        file_put_contents(PID_FILE, trim($pid));
-        echo "[OK] 起動しました (PID: " . trim($pid) . ")\n";
+        
+        echo "=== Next.jsアプリ起動 ===\n";
+        
+        // ポート3000のプロセスを自動停止
+        killPort3000Processes();
+        
+        // バックグラウンドでNext.jsを起動
+        if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
+            $pid = trim(file_get_contents(PID_FILE));
+            echo "[OK] 起動しました (PID: $pid)\n";
+        } else {
+            echo "[ERR] 起動に失敗しました\n";
+        }
         break;
 
     case 'dev':
+        // Next.jsディレクトリの存在確認
+        if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            break;
+        }
+        
         if ($isStreaming) {
+            // ポート3000のプロセスを自動停止
+            killPort3000Processes();
+            
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('npm install 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
             
             if ($code === 0) {
-                // 開発用サーバをバックグラウンドで起動
-                $cmd = sprintf(
-                    'nohup npm run dev > %s 2>&1 & echo $!',
-                    escapeshellarg(LOG_FILE)
-                );
-                $pid = shell_exec($cmd);
-                file_put_contents(PID_FILE, trim($pid));
-                echo "[OK] 開発サーバを起動しました (PID: " . trim($pid) . ")\n";
+                echo "\n=== 開発サーバー起動（ポート3000） ===\n";
+                flush();
+                
+                // バックグラウンドで開発サーバを起動
+                if (startInBackground('HOME=/root PORT=3000 npm run dev', NEXT_DIR)) {
+                    echo "[OK] 開発サーバーをポート3000で起動しました\n";
+                } else {
+                    echo "[ERR] 開発サーバー起動に失敗しました\n";
+                }
             }
         } else {
             chdir(NEXT_DIR);
@@ -342,14 +424,25 @@ switch ($action) {
         break;
 
     case 'stop':
-        if (!isRunning()) {
-            echo "[WARN] プロセスが見つかりません\n";
-            break;
+        echo "=== Next.jsアプリ停止 ===\n";
+        
+        // PIDファイルから停止
+        if (isRunning()) {
+            $pid = (int)trim(file_get_contents(PID_FILE));
+            if ($pid > 0 && posix_kill($pid, SIGTERM)) {
+                unlink(PID_FILE);
+                echo "[OK]Next.jsアプリを停止しました (PID: $pid)\n";
+            } else {
+                echo "[ERR]プロセス停止に失敗しました\n";
+            }
+        } else {
+            echo "[INFO]PIDファイルにプロセスが見つかりません\n";
         }
-        $pid = (int)trim(file_get_contents(PID_FILE));
-        posix_kill($pid, SIGTERM);
-        unlink(PID_FILE);
-        echo "[OK] 停止しました (PID: $pid)\n";
+        
+        // ポート3000を使用している全プロセスを停止
+        killPort3000Processes();
+        
+        echo "[OK]停止処理が完了しました\n";
         break;
 
     case 'restart':
@@ -403,7 +496,7 @@ switch ($action) {
             
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
