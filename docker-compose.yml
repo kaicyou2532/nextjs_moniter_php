@@ -10,17 +10,9 @@ services:
       - "8080:80"
       - "3000:3000"
     volumes:
-      - type: bind
-        source: ./next-app
-        target: /var/www/html/next-app
-        bind:
-          propagation: rshared
-      - type: bind
-        source: ./logs
-        target: /var/www/html/logs
-      - type: bind
-        source: ./pids
-        target: /var/www/html/pids
+      - ./next-app:/var/www/html/next-app
+      - ./logs:/var/www/html/logs
+      - ./pids:/var/www/html/pids
     environment:
       - GITURL=https://github.com/AIM-SC/next-website.git
       - HOME=/root
