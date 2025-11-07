@@ -45,11 +45,24 @@ function isRunning(): bool {
 function restartNginx(): void {
     echo "[INFO]nginx設定をテスト中...\n";
     
+    // nginx用ディレクトリの権限確認・修正
+    passthru('mkdir -p /var/run /var/log/nginx 2>/dev/null || true');
+    passthru('chown -R root:root /var/run /var/log/nginx 2>/dev/null || true');
+    passthru('chmod 755 /var/run /var/log/nginx 2>/dev/null || true');
+    
     // nginx設定テスト
     passthru('nginx -t 2>&1', $testCode);
     if ($testCode !== 0) {
         echo "[ERR]nginx設定にエラーがあります\n";
-        return;
+        echo "[INFO]権限修正を試行中...\n";
+        passthru('touch /var/run/nginx.pid && chmod 644 /var/run/nginx.pid 2>/dev/null || true');
+        
+        // 再テスト
+        passthru('nginx -t 2>&1', $retestCode);
+        if ($retestCode !== 0) {
+            echo "[ERR]nginx設定修正後もエラーが続いています\n";
+            return;
+        }
     }
     
     echo "[OK]nginx設定テスト成功\n";

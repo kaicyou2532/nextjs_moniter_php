@@ -65,7 +65,10 @@ COPY .env* /var/www/html/
 # ディレクトリの作成と権限設定
 RUN mkdir -p logs pids next-app && \
     chmod -R 755 logs pids next-app && \
-    chown -R www-data:www-data /var/www/html
+    chown -R www-data:www-data /var/www/html && \
+    mkdir -p /var/run /var/log/nginx && \
+    chown -R root:root /var/run /var/log/nginx && \
+    chmod 755 /var/run /var/log/nginx
 
 # ポートを公開
 EXPOSE 8080 80
