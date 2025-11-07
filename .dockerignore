@@ -2,3 +2,53 @@
 .env
 docker-compose.override.yml
 *.log
+
+# Node.js関連（サイズが大きいため除外）
+next-app/node_modules/
+next-app/.next/
+next-app/dist/
+next-app/build/
+next-app/coverage/
+next-app/.nyc_output/
+
+# ログとPIDファイル
+logs/
+pids/
+
+# Git関連
+.git/
+.gitignore
+
+# IDE・エディタ関連
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS関連
+.DS_Store
+Thumbs.db
+
+# npm関連
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 一時ファイル
+*.tmp
+*.temp
+.cache/
+
+# 大きなメディアファイル（もしある場合）
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.zip
+*.tar.gz
+*.rar
+
+# バックアップファイル
+*.backup
+*.bak

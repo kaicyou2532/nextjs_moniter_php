@@ -50,8 +50,9 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # 作業ディレクトリ設定
 WORKDIR /var/www/html
 
-# プロジェクトファイルをコピー
-COPY . /var/www/html/
+# 必要なファイルのみをコピー
+COPY public/ /var/www/html/public/
+COPY .env* /var/www/html/
 
 # ディレクトリの作成と権限設定
 RUN mkdir -p logs pids next-app && \
