@@ -306,6 +306,58 @@ function killPort3000Processes(): void {
 }
 
 /**
+ * Next.jsアプリケーションを起動
+ */
+function startNextJsApp(): bool {
+    echo "\n=== Next.jsアプリケーション起動 ===\n";
+    
+    // Next.jsディレクトリの存在確認
+    if (!is_dir(NEXT_DIR)) {
+        echo "[ERR] Next.jsディレクトリが見つかりません: " . NEXT_DIR . "\n";
+        return false;
+    }
+    
+    // package.json存在確認
+    if (!is_file(NEXT_DIR . '/package.json')) {
+        echo "[ERR] package.jsonが見つかりません\n";
+        return false;
+    }
+    
+    // .nextビルドディレクトリの確認
+    if (!is_dir(NEXT_DIR . '/.next')) {
+        echo "[WARN] .nextディレクトリが見つかりません。ビルドが必要です\n";
+        return false;
+    }
+    
+    echo "[OK] Next.jsプロジェクト確認完了\n";
+    echo "[INFO] 作業ディレクトリ: " . NEXT_DIR . "\n";
+    
+    // 既存プロセス停止
+    killPort3000Processes();
+    
+    // バックグラウンドでNext.jsを起動
+    if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
+        echo "[OK] Next.jsアプリをポート3000で起動しました\n";
+        echo "[INFO] http://localhost:3000でアクセス可能です\n";
+        echo "[INFO] nginx経由: http://localhost でアクセス可能です\n";
+        
+        // 起動確認
+        sleep(3);
+        $curlTest = shell_exec('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null');
+        if ($curlTest == '200') {
+            echo "[OK] Next.jsアプリが正常に応答しています (HTTP $curlTest)\n";
+            return true;
+        } else {
+            echo "[WARN] Next.jsアプリの応答確認: HTTP $curlTest\n";
+            return false;
+        }
+    } else {
+        echo "[ERR] バックグラウンド起動に失敗しました\n";
+        return false;
+    }
+}
+
+/**
  * Next.js環境変数ファイルを作成
  */
 function createNextJsEnvFile() {
@@ -496,48 +548,38 @@ switch ($action) {
                 echo "\n=== サーバー起動（ポート3000） ===\n";
                 flush();
                 
-                // 既存のプロセスがあれば停止
-                killPort3000Processes();
+                // 専用関数でNext.jsアプリを起動
+                $startResult = startNextJsApp();
                 
-                // バックグラウンドでNext.jsを起動
-                if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
-                    echo "[OK] Next.jsアプリをポート3000で起動しました\n";
-                    echo "[INFO] http://localhost:3000でアクセス可能です\n";
-                    echo "[INFO] nginx経由でhttp://localhost:3000でもアクセス可能です\n";
-                    
-                    // 起動確認
-                    sleep(3);
-                    $pid = file_exists(PID_FILE) ? trim(file_get_contents(PID_FILE)) : '';
-                    
-                    // PIDファイルでの確認
-                    if ($pid && posix_kill((int)$pid, 0)) {
-                        echo "[OK] プロセス確認完了 (PID: $pid)\n";
-                    } else {
-                        echo "[WARN] PIDファイルでのプロセス確認に失敗\n";
-                        
-                        // 別の方法でNext.jsプロセスを確認
-                        echo "[INFO] Next.jsプロセスを検索中...\n";
-                        $nodeProcesses = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep');
-                        if (!empty($nodeProcesses)) {
-                            echo "[OK] Next.jsプロセス発見:\n";
-                            echo $nodeProcesses . "\n";
-                        } else {
-                            echo "[ERR] Next.jsプロセスが見つかりません\n";
-                        }
-                        
-                        // ポート3000の使用状況確認
-                        echo "[INFO] ポート3000の使用状況:\n";
-                        $portCheck = shell_exec('netstat -tlnp | grep :3000 2>/dev/null || echo "ポート3000は使用されていません"');
-                        echo $portCheck . "\n";
-                    }
+                if ($startResult) {
+                    echo "[完了] Next.jsアプリケーションが正常に起動しました\n";
                 } else {
-                    echo "[ERR] バックグラウンド起動に失敗しました\n";
+                    echo "[警告] Next.jsアプリケーションの起動に問題があります\n";
+                    
+                    // 追加のデバッグ情報
+                    echo "[INFO] デバッグ情報:\n";
+                    $nodeProcesses = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep');
+                    if (!empty($nodeProcesses)) {
+                        echo "- Next.jsプロセス: 検出済み\n";
+                        echo $nodeProcesses . "\n";
+                    } else {
+                        echo "- Next.jsプロセス: 未検出\n";
+                    }
+                    
+                    $portCheck = shell_exec('netstat -tlnp | grep :3000 2>/dev/null');
+                    if (!empty($portCheck)) {
+                        echo "- ポート3000: 使用中\n" . $portCheck . "\n";
+                    } else {
+                        echo "- ポート3000: 未使用\n";
+                    }
                 }
             }
         } else {
             // 環境変数ファイル作成
+            echo "=== 環境変数設定 ===\n";
             createNextJsEnvFile();
             
+            echo "=== 依存関係インストール ===\n";
             chdir(NEXT_DIR);
             passthru('npm install 2>&1', $code);
             echo ($code === 0)
@@ -545,26 +587,26 @@ switch ($action) {
                 : "[ERR] 依存関係インストール失敗 (exit $code)\n";
 
             if ($code === 0) {
-                passthru('npm run build 2>&1', $code);
+                echo "=== Next.jsビルド実行 ===\n";
+                passthru('HOME=/root npm run build 2>&1', $code);
                 echo ($code === 0)
                     ? "[OK] ビルド完了\n"
                     : "[ERR] ビルド失敗 (exit $code)\n";
             }
 
             if ($code === 0) {
-                // 既存のプロセスを停止
-                killPort3000Processes();
+                // 専用関数でNext.jsアプリを起動
+                $startResult = startNextJsApp();
                 
-                // バックグラウンドでNext.jsを起動
-                if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
-                    echo "[OK] Next.jsアプリをポート3000で起動しました\n";
-                } else {
-                    echo "[ERR] バックグラウンド起動に失敗しました\n";
+                if (!$startResult) {
+                    echo "[ERR] Next.jsアプリケーションの起動に失敗しました\n";
+                    $code = 1; // エラーコードを設定
                 }
             }
+            
             echo ($code === 0)
-                ? "[OK] スタート完了\n"
-                : "[ERR] スタート失敗 (exit $code)\n";
+                ? "\n[完了] 全工程が正常に完了しました\n"
+                : "\n[失敗] エラーが発生しました (exit $code)\n";
         }
         break;
 
