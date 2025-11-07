@@ -10,9 +10,9 @@ services:
       - "8080:8080"   # PHP管理ツール（Apache）
       - "3000:80"     # Next.jsアプリ（nginx）
     volumes:
-      - nextjs-app:/var/www/html/next-app
-      - logs-data:/var/www/html/logs
-      - pids-data:/var/www/html/pids
+      - ./next-app:/var/www/html/next-app
+      - ./logs:/var/www/html/logs
+      - ./pids:/var/www/html/pids
     environment:
       - GITURL=https://github.com/AIM-SC/next-website.git
       - HOME=/root
@@ -23,7 +23,7 @@ services:
     privileged: true
 
 # 名前付きボリューム
-volumes:
-  nextjs-app:
-  logs-data:
-  pids-data:
+# volumes:
+#   nextjs-app-data:
+#   logs-data:
+#   pids-data:

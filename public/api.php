@@ -113,6 +113,14 @@ function GitPull(): bool {
     // 既存リポジトリの場合はpull
     chdir(NEXT_DIR);
     
+    // .env.localファイルをバックアップ（存在する場合）
+    $envFile = NEXT_DIR . '/.env.local';
+    $envBackup = NEXT_DIR . '/.env.local.backup';
+    if (file_exists($envFile)) {
+        echo "[INFO]環境変数ファイルをバックアップ中...\n";
+        copy($envFile, $envBackup);
+    }
+    
     // 所有権とディレクトリ権限を修正
     passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR), $chmodCode);
     passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR), $chownCode);
@@ -135,12 +143,31 @@ function GitPull(): bool {
     
     if ($code === 0) {
         echo "[OK]最新版の取得が完了しました\n";
+        
+        // 環境変数ファイルを復元
+        if (file_exists($envBackup)) {
+            echo "[INFO]環境変数ファイルを復元中...\n";
+            copy($envBackup, $envFile);
+            unlink($envBackup); // バックアップファイルを削除
+            echo "[OK]環境変数ファイルを復元しました\n";
+        } else if (!file_exists($envFile)) {
+            echo "[INFO]環境変数ファイルが見つかりません。新規作成します\n";
+            createNextJsEnvFile();
+        }
+        
         // pull後も所有権を修正
         passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR));
         passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR));
         return true;
     } else {
         echo "[ERR]git pull失敗 (exit $code)\n";
+        
+        // 失敗時もバックアップから復元を試行
+        if (file_exists($envBackup)) {
+            echo "[INFO]git pull失敗のため環境変数ファイルを復元します\n";
+            copy($envBackup, $envFile);
+            unlink($envBackup);
+        }
         return false;
     }
 }
