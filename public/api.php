@@ -103,6 +103,9 @@ function GitPull(): bool {
         passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR), $chmodCode);
         passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR), $chownCode);
         
+        // Next.js環境変数ファイルを作成
+        createNextJsEnvFile();
+        
         echo "[OK]リポジトリをクローンしました\n";
         return true;
     }
@@ -207,6 +210,35 @@ function killPort3000Processes(): void {
     echo "[OK] Node.js関連プロセスをクリーンアップしました\n";
     
     flush();
+}
+
+/**
+ * Next.js環境変数ファイルを作成
+ */
+function createNextJsEnvFile() {
+    $envPath = "/var/www/html/next-app/.env.local";
+    
+    // 環境変数の内容
+    $envContent = "# Next.js Environment Variables\n";
+    $envContent .= "NEXT_PUBLIC_API_URL=http://localhost:3000\n";
+    $envContent .= "NEXT_PUBLIC_SITE_NAME=NextJS Monitor\n";
+    $envContent .= "NODE_ENV=production\n";
+    $envContent .= "\n# MicroCMS Settings (必要に応じて設定)\n";
+    $envContent .= "# MICROCMS_SERVICE_DOMAIN=your-domain\n";
+    $envContent .= "# MICROCMS_API_KEY=your-api-key\n";
+    
+    // ファイルを作成
+    if (file_put_contents($envPath, $envContent)) {
+        echo "[OK].env.localファイルを作成しました\n";
+        
+        // パーミッション設定
+        chmod($envPath, 0644);
+        
+        return true;
+    } else {
+        echo "[ERROR].env.localファイルの作成に失敗しました\n";
+        return false;
+    }
 }
 
 /**
@@ -486,6 +518,22 @@ switch ($action) {
     case 'nginx':
         // nginx 再起動
         restartNginx();
+        break;
+
+    case 'env':
+        // 環境変数ファイル作成
+        if (createNextJsEnvFile()) {
+            echo "[OK] 環境変数ファイルを作成しました\n";
+            
+            // 環境変数ファイルの内容を表示
+            $envPath = "/var/www/html/next-app/.env.local";
+            if (file_exists($envPath)) {
+                echo "\n-- .env.local の内容 --\n";
+                echo file_get_contents($envPath);
+            }
+        } else {
+            echo "[ERROR] 環境変数ファイルの作成に失敗しました\n";
+        }
         break;
 
     case 'install':

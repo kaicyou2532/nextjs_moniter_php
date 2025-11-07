@@ -186,6 +186,7 @@ require __DIR__ . '/auth.php';
       <button onclick="send('dev')">開発者モードで起動</button>
       <button onclick="send('install')">依存関係をインストール</button>
       <button onclick="send('status')">状態確認</button>
+      <button onclick="send('env')">環境変数設定</button>
     </div>
     <div class="log-controls">
       <button class="clear-log-btn" onclick="clearLog()">ログクリア</button>
