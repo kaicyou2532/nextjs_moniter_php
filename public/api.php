@@ -335,25 +335,64 @@ function startNextJsApp(): bool {
     // 既存プロセス停止
     killPort3000Processes();
     
-    // バックグラウンドでNext.jsを起動
+    // まずnpm run startを試行
     if (startInBackground('HOME=/root PORT=3000 npm run start', NEXT_DIR)) {
-        echo "[OK] Next.jsアプリをポート3000で起動しました\n";
-        echo "[INFO] http://localhost:3000でアクセス可能です\n";
-        echo "[INFO] nginx経由: http://localhost でアクセス可能です\n";
+        echo "[OK] npm run start で起動成功\n";
+        $startMethod = "npm run start";
+    } else {
+        echo "[WARN] npm run start が失敗しました。代替方法を試行中...\n";
         
-        // 起動確認
-        sleep(3);
-        $curlTest = shell_exec('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null');
-        if ($curlTest == '200') {
-            echo "[OK] Next.jsアプリが正常に応答しています (HTTP $curlTest)\n";
-            return true;
+        // 代替方法1: node直接実行
+        if (file_exists(NEXT_DIR . '/.next/standalone/server.js')) {
+            echo "[INFO] standalone server.jsを検出。直接実行を試行...\n";
+            if (startInBackground('HOME=/root PORT=3000 node .next/standalone/server.js', NEXT_DIR)) {
+                echo "[OK] node直接実行で起動成功\n";
+                $startMethod = "node direct";
+            } else {
+                echo "[ERR] node直接実行も失敗\n";
+                return false;
+            }
+        } 
+        // 代替方法2: next start直接実行
+        else if (file_exists(NEXT_DIR . '/node_modules/.bin/next')) {
+            echo "[INFO] nextコマンドを直接実行を試行...\n";
+            if (startInBackground('HOME=/root PORT=3000 ./node_modules/.bin/next start', NEXT_DIR)) {
+                echo "[OK] next start直接実行で起動成功\n";
+                $startMethod = "next direct";
+            } else {
+                echo "[ERR] next start直接実行も失敗\n";
+                return false;
+            }
         } else {
-            echo "[WARN] Next.jsアプリの応答確認: HTTP $curlTest\n";
+            echo "[ERR] 代替起動方法が見つかりません\n";
             return false;
         }
+    }
+    
+    echo "[OK] Next.jsアプリをポート3000で起動しました ($startMethod)\n";
+    echo "[INFO] http://localhost:3000でアクセス可能です\n";
+    echo "[INFO] nginx経由: http://localhost でアクセス可能です\n";
+    
+    // 起動確認
+    sleep(5); // 起動に時間がかかる場合があるので少し長めに待つ
+    $curlTest = shell_exec('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null');
+    if ($curlTest == '200') {
+        echo "[OK] Next.jsアプリが正常に応答しています (HTTP $curlTest)\n";
+        return true;
     } else {
-        echo "[ERR] バックグラウンド起動に失敗しました\n";
-        return false;
+        echo "[WARN] Next.jsアプリの応答確認: HTTP $curlTest\n";
+        
+        // もう少し待ってから再確認
+        echo "[INFO] 追加で5秒待機してから再確認...\n";
+        sleep(5);
+        $curlTest2 = shell_exec('curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null');
+        if ($curlTest2 == '200') {
+            echo "[OK] Next.jsアプリが正常に応答しています (HTTP $curlTest2)\n";
+            return true;
+        } else {
+            echo "[WARN] 再確認でも応答なし: HTTP $curlTest2\n";
+            return false;
+        }
     }
 }
 
@@ -408,10 +447,41 @@ function startInBackground(string $command, string $workingDir = null): bool {
         echo "[INFO] 作業ディレクトリ: " . getcwd() . "\n";
     }
     
+    // package.jsonのscriptを確認
+    if (file_exists('package.json')) {
+        $packageJson = json_decode(file_get_contents('package.json'), true);
+        if (isset($packageJson['scripts']['start'])) {
+            echo "[INFO] start script: " . $packageJson['scripts']['start'] . "\n";
+        } else {
+            echo "[WARN] package.jsonにstartスクリプトがありません\n";
+        }
+    }
+    
     echo "[INFO] 実行コマンド: $command\n";
     
-    // バックグラウンドで実行
-    $fullCommand = "nohup $command > " . LOG_FILE . " 2>&1 & echo $!";
+    // まず、npmコマンドが利用可能か確認
+    $npmCheck = shell_exec('which npm 2>/dev/null');
+    if (empty($npmCheck)) {
+        echo "[ERR] npmコマンドが見つかりません\n";
+        return false;
+    }
+    echo "[OK] npm: " . trim($npmCheck) . "\n";
+    
+    // Node.jsの確認
+    $nodeCheck = shell_exec('which node 2>/dev/null');
+    if (!empty($nodeCheck)) {
+        echo "[OK] node: " . trim($nodeCheck) . "\n";
+        $nodeVersion = shell_exec('node --version 2>/dev/null');
+        echo "[INFO] Node.js version: " . trim($nodeVersion) . "\n";
+    }
+    
+    // エラーログファイルを別途作成
+    $errorLogFile = "/var/www/html/logs/npm-start-error.log";
+    
+    // バックグラウンドで実行（詳細ログ付き）
+    $fullCommand = "cd " . escapeshellarg(getcwd()) . " && $command > " . LOG_FILE . " 2> $errorLogFile & echo $!";
+    echo "[DEBUG] 実行する完全コマンド: $fullCommand\n";
+    
     $pid = trim(shell_exec($fullCommand));
     
     echo "[INFO] 取得したPID: $pid\n";
@@ -419,13 +489,30 @@ function startInBackground(string $command, string $workingDir = null): bool {
     if ($pid && is_numeric($pid)) {
         file_put_contents(PID_FILE, $pid);
         
+        // プロセス開始を少し待つ
+        sleep(3);
+        
+        // エラーログを確認
+        if (file_exists($errorLogFile)) {
+            $errorContent = file_get_contents($errorLogFile);
+            if (!empty($errorContent)) {
+                echo "[ERR] npm start エラー:\n" . $errorContent . "\n";
+            }
+        }
+        
         // プロセスが実際に開始されたか確認
-        sleep(2);
         if (posix_kill((int)$pid, 0)) {
             echo "[OK] プロセス開始確認 (PID: $pid)\n";
             return true;
         } else {
             echo "[WARN] PID $pid のプロセスが見つかりません\n";
+            
+            // ログファイルの内容を確認
+            if (file_exists(LOG_FILE)) {
+                echo "[INFO] 起動ログ (最後の10行):\n";
+                $logContent = shell_exec('tail -10 ' . LOG_FILE . ' 2>/dev/null');
+                echo $logContent . "\n";
+            }
             
             // 代替確認方法
             $nodeCheck = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep | head -1');
@@ -819,6 +906,137 @@ switch ($action) {
             echo "[OK]最新版の取得が完了しました\n";
         } else {
             echo "[ERR]最新版の取得に失敗しました\n";
+        }
+        break;
+
+    case 'debug':
+        // Next.js詳細デバッグ
+        echo "=== Next.js 詳細デバッグ ===\n";
+        
+        // 作業ディレクトリ確認
+        echo "[INFO] 現在の作業ディレクトリ: " . getcwd() . "\n";
+        echo "[INFO] Next.jsディレクトリ: " . NEXT_DIR . "\n";
+        
+        if (is_dir(NEXT_DIR)) {
+            chdir(NEXT_DIR);
+            echo "[OK] Next.jsディレクトリに移動しました\n";
+            echo "[INFO] 移動後の作業ディレクトリ: " . getcwd() . "\n";
+            
+            // package.json確認
+            if (file_exists('package.json')) {
+                $packageJson = json_decode(file_get_contents('package.json'), true);
+                echo "[OK] package.json読み込み成功\n";
+                if (isset($packageJson['scripts']['start'])) {
+                    echo "[INFO] start script: " . $packageJson['scripts']['start'] . "\n";
+                } else {
+                    echo "[WARN] startスクリプトが見つかりません\n";
+                }
+                if (isset($packageJson['scripts']['build'])) {
+                    echo "[INFO] build script: " . $packageJson['scripts']['build'] . "\n";
+                }
+            } else {
+                echo "[ERR] package.jsonが見つかりません\n";
+            }
+            
+            // .nextディレクトリ確認
+            if (is_dir('.next')) {
+                echo "[OK] .nextディレクトリが存在します\n";
+                $nextFiles = shell_exec('ls -la .next/ 2>/dev/null | head -10');
+                echo $nextFiles . "\n";
+            } else {
+                echo "[ERR] .nextディレクトリが見つかりません（ビルドが必要）\n";
+            }
+            
+            // node_modulesディレクトリ確認
+            if (is_dir('node_modules')) {
+                echo "[OK] node_modulesディレクトリが存在します\n";
+                if (file_exists('node_modules/.bin/next')) {
+                    echo "[OK] nextコマンドが利用可能です\n";
+                } else {
+                    echo "[WARN] nextコマンドが見つかりません\n";
+                }
+            } else {
+                echo "[ERR] node_modulesディレクトリが見つかりません（npm installが必要）\n";
+            }
+            
+            // npm/nodeコマンド確認
+            echo "\n-- コマンド確認 --\n";
+            $npmPath = shell_exec('which npm 2>/dev/null');
+            if (!empty($npmPath)) {
+                echo "[OK] npm: " . trim($npmPath) . "\n";
+                $npmVersion = shell_exec('npm --version 2>/dev/null');
+                echo "[INFO] npm version: " . trim($npmVersion) . "\n";
+            } else {
+                echo "[ERR] npmが見つかりません\n";
+            }
+            
+            $nodePath = shell_exec('which node 2>/dev/null');
+            if (!empty($nodePath)) {
+                echo "[OK] node: " . trim($nodePath) . "\n";
+                $nodeVersion = shell_exec('node --version 2>/dev/null');
+                echo "[INFO] node version: " . trim($nodeVersion) . "\n";
+            } else {
+                echo "[ERR] nodeが見つかりません\n";
+            }
+            
+            // 手動でnpm run startを試行
+            echo "\n-- 手動npm run start試行 --\n";
+            echo "[INFO] 次のコマンドを手動実行します: npm run start\n";
+            $startOutput = shell_exec('timeout 10 npm run start 2>&1 | head -20');
+            echo "出力:\n" . $startOutput . "\n";
+            
+        } else {
+            echo "[ERR] Next.jsディレクトリが見つかりません\n";
+        }
+        break;
+
+    case 'manual-start':
+        // Next.js手動起動
+        echo "=== Next.js手動起動 ===\n";
+        
+        if (!is_dir(NEXT_DIR)) {
+            echo "[ERR] Next.jsディレクトリが見つかりません\n";
+            break;
+        }
+        
+        chdir(NEXT_DIR);
+        
+        // 既存プロセス停止
+        killPort3000Processes();
+        
+        echo "[INFO] 作業ディレクトリ: " . getcwd() . "\n";
+        echo "[INFO] シンプルなnpm run start実行を試行...\n";
+        
+        // シンプルなバックグラウンド実行
+        $command = 'nohup npm run start > /var/www/html/logs/nextjs.log 2>&1 &';
+        echo "[INFO] 実行コマンド: $command\n";
+        
+        shell_exec($command);
+        
+        echo "[INFO] コマンド実行完了。5秒待機後に状況確認...\n";
+        sleep(5);
+        
+        // プロセス確認
+        $processes = shell_exec('ps aux | grep "npm.*start\|node.*next" | grep -v grep');
+        if (!empty($processes)) {
+            echo "[OK] Next.jsプロセス検出:\n" . $processes . "\n";
+        } else {
+            echo "[WARN] Next.jsプロセスが見つかりません\n";
+        }
+        
+        // ポート確認
+        $portCheck = shell_exec('netstat -tlnp | grep :3000 2>/dev/null');
+        if (!empty($portCheck)) {
+            echo "[OK] ポート3000使用中:\n" . $portCheck . "\n";
+        } else {
+            echo "[WARN] ポート3000は使用されていません\n";
+        }
+        
+        // ログ確認
+        if (file_exists('/var/www/html/logs/nextjs.log')) {
+            echo "[INFO] 最新のログ (最後の10行):\n";
+            $logContent = shell_exec('tail -10 /var/www/html/logs/nextjs.log');
+            echo $logContent . "\n";
         }
         break;
 
