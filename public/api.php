@@ -43,42 +43,35 @@ function isRunning(): bool {
  * nginx を再起動
  */
 function restartNginx(): void {
-    echo "[INFO]nginx設定をテスト中...\n";
+    echo "[INFO]nginx設定をチェック中...\n";
     
-    // nginx用ディレクトリの権限確認・修正
-    passthru('mkdir -p /var/run /var/log/nginx 2>/dev/null || true');
-    passthru('chown -R root:root /var/run /var/log/nginx 2>/dev/null || true');
-    passthru('chmod 755 /var/run /var/log/nginx 2>/dev/null || true');
-    
-    // nginx設定テスト
-    passthru('nginx -t 2>&1', $testCode);
-    if ($testCode !== 0) {
-        echo "[ERR]nginx設定にエラーがあります\n";
-        echo "[INFO]権限修正を試行中...\n";
-        passthru('touch /var/run/nginx.pid && chmod 644 /var/run/nginx.pid 2>/dev/null || true');
-        
-        // 再テスト
-        passthru('nginx -t 2>&1', $retestCode);
-        if ($retestCode !== 0) {
-            echo "[ERR]nginx設定修正後もエラーが続いています\n";
-            return;
-        }
-    }
-    
-    echo "[OK]nginx設定テスト成功\n";
-    
-    // Dockerコンテナ内では supervisorctl を使用
+    // supervisorctl経由でnginx再起動（設定テストなし）
     if (file_exists('/usr/bin/supervisorctl')) {
-        echo "[INFO]supervisorctlでnginxを再起動中...\n";
-        passthru('supervisorctl restart nginx 2>&1', $code);
-        echo ($code === 0)
-            ? "[OK]リバースプロキシを再起動しました\n"
-            : "[ERR]リバースプロキシの再起動に失敗しました (exit $code)\n";
+        echo "[INFO]supervisorctlでnginxを停止中...\n";
+        passthru('supervisorctl stop nginx 2>&1', $stopCode);
+        
+        sleep(2);
+        
+        echo "[INFO]supervisorctlでnginxを開始中...\n";
+        passthru('supervisorctl start nginx 2>&1', $startCode);
+        
+        if ($startCode === 0) {
+            echo "[OK]リバースプロキシを再起動しました\n";
             
-        // 再起動後の状態確認
-        if ($code === 0) {
+            // 再起動後の状態確認
             sleep(2);
+            echo "[INFO]nginx状態確認:\n";
             passthru('supervisorctl status nginx 2>&1');
+            
+            // ポート80の待ち受け確認
+            echo "[INFO]ポート80の待ち受け確認:\n";
+            passthru('netstat -tlnp | grep :80 2>&1 || echo "ポート80で待ち受けしていません"');
+        } else {
+            echo "[ERR]リバースプロキシの起動に失敗しました (exit $startCode)\n";
+            
+            // エラーログを表示
+            echo "[INFO]nginxエラーログ:\n";
+            passthru('tail -10 /var/log/supervisor/nginx.err.log 2>/dev/null || echo "エラーログがありません"');
         }
     } else {
         // 従来のsystemctl（ホスト環境用）
