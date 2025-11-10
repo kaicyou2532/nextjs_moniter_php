@@ -183,14 +183,14 @@ require __DIR__ . '/auth.php';
       <button onclick="send('build')">ビルド(記事の公開)</button>
       <button onclick="send('stop')">WEBサーバー停止</button>
       <button onclick="send('Renewal')">GitHubから最新版を取得</button>
-      <button onclick="send('nginx')">リバースプロキシ再起動</button>
+      <!-- <button onclick="send('nginx')">リバースプロキシ再起動</button>
       <button onclick="send('dev')">開発者モードで起動</button>
-      <button onclick="send('install')">依存関係をインストール</button>
+      <button onclick="send('install')">依存関係をインストール</button> -->
       <button onclick="send('status')">状態確認</button>
-      <button onclick="send('env')">環境変数設定</button>
+      <!-- <button onclick="send('env')">環境変数設定</button>
       <button onclick="send('debug')">Next.jsデバッグ</button>
       <button onclick="send('manual-start')">手動起動</button>
-      <button onclick="send('port80check')">ポート80確認</button>
+      <button onclick="send('port80check')">ポート80確認</button> -->
     </div>
     <div class="log-controls">
       <button class="clear-log-btn" onclick="clearLog()">ログクリア</button>
