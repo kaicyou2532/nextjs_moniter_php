@@ -1,0 +1,30 @@
+# 認証情報ファイル（機密情報）
+.env.auth
+.env.local
+.env.production
+.env.development
+
+# ログファイル
+logs/
+*.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 一時ファイル
+*.tmp
+*.temp

@@ -181,7 +181,8 @@ require __DIR__ . '/auth.php';
     </header>
     <div class="controls">
       <button onclick="send('build')">ビルド(記事の公開)</button>
-      <button onclick="send('stop')">WEBサーバー停止</button>
+      <button onclick="confirmStop()" style="background-color: #e74c3c;">⚠️ Webサーバー完全停止</button>
+      <button onclick="send('restart')" style="background-color: #f39c12;">🔄 Webサーバー再起動</button>
       <button onclick="send('Renewal')">GitHubから最新版を取得</button>
       <!-- <button onclick="send('nginx')">リバースプロキシ再起動</button>
       <button onclick="send('dev')">開発者モードで起動</button>
@@ -313,6 +314,13 @@ require __DIR__ . '/auth.php';
     function clearLog() {
       document.getElementById('status').textContent = '-- ステータス表示 --';
       document.getElementById('status').style.color = '#333';
+    }
+
+    // 停止確認ダイアログ
+    function confirmStop() {
+      if (confirm('🚨 注意: この操作は以下を完全停止します:\n\n• Next.jsアプリケーション (ポート3000)\n• nginx リバースプロキシ (ポート80)\n\n再開するには「ビルド」→「起動」が必要です。\n\n本当に停止しますか？')) {
+        send('stop');
+      }
     }
 
     // ログアウト機能

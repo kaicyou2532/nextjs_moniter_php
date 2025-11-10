@@ -84,6 +84,40 @@ function restartNginx(): void {
 }
 
 /**
+ * nginx を停止
+ */
+function stopNginx(): void {
+    echo "[INFO]リバースプロキシ(nginx)を停止中...\n";
+    
+    // supervisorctl経由でnginx停止
+    if (file_exists('/usr/bin/supervisorctl')) {
+        echo "[INFO]supervisorctlでnginxを停止中...\n";
+        passthru('supervisorctl stop nginx 2>&1', $stopCode);
+        
+        if ($stopCode === 0) {
+            echo "[OK]リバースプロキシ(nginx)を停止しました\n";
+            
+            // 停止後の状態確認
+            echo "[INFO]nginx停止状態確認:\n";
+            passthru('supervisorctl status nginx 2>&1');
+        } else {
+            echo "[ERR]リバースプロキシの停止に失敗しました (exit $stopCode)\n";
+        }
+    } else {
+        // systemctl経由でnginx停止
+        echo "[INFO]systemctlでnginxを停止中...\n";
+        passthru('systemctl stop nginx 2>&1', $code);
+        echo ($code === 0)
+            ? "[OK]リバースプロキシ(nginx)を停止しました\n"
+            : "[ERR]リバースプロキシの停止に失敗しました (exit $code)\n";
+    }
+    
+    // ポート80の確認
+    echo "[INFO]ポート80の状態確認:\n";
+    passthru('netstat -tlnp | grep :80 2>&1 || echo "ポート80は使用されていません"');
+}
+
+/**
  * Git リポジトリを origin/main から pull
  */
 function GitPull(): bool {
@@ -109,7 +143,7 @@ function GitPull(): bool {
     
     // Next.jsディレクトリが存在しない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
-        // 既存ディレクトリを完全削除（強力な権限修正）
+        // 既存ディレクトリを完全削除
         if (is_dir(NEXT_DIR)) {
             echo "[INFO]既存ディレクトリを削除中...\n";
             passthru('chmod -R 777 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
@@ -408,17 +442,7 @@ function createNextJsEnvFile() {
         echo "[INFO]バックアップから環境変数を復元中...\n";
         $envContent = file_get_contents($envBackupPath);
     } else {
-        // デフォルトの環境変数の内容
-        $envContent = "# Next.js Environment Variables\n";
-        $envContent .= "NEXT_PUBLIC_API_URL=http://localhost:3000\n";
-        $envContent .= "NEXT_PUBLIC_SITE_NAME=NextJS Monitor\n";
-        $envContent .= "NODE_ENV=production\n";
-        $envContent .= "\n# MicroCMS Settings\n";
-        $envContent .= "MICROCMS_SERVICE_DOMAIN=learning-commons\n";
-        $envContent .= "MICROCMS_API_KEY=hwlujpRx3BOkB4NZFWjISIYiMfC74TElWntX\n";
-        $envContent .= "MICROCMS_PREVIEW_SECRET=B422learning-commons\n";
-        $envContent .= "\n# Google Analytics\n";
-        $envContent .= "GA_ID=G-CL0J962CGY\n";
+        echo "環境変数の設定に失敗しました。管理者に問い合わせてください。";
     }
     
     // ファイルを作成
@@ -767,9 +791,10 @@ switch ($action) {
         break;
 
     case 'stop':
-        echo "=== Next.jsアプリ停止 ===\n";
+        echo "=== Webサーバー完全停止 ===\n";
         
-        // PIDファイルから停止
+        // 1. Next.jsアプリ停止
+        echo "\n--- Next.jsアプリ停止 ---\n";
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
             if ($pid > 0 && posix_kill($pid, SIGTERM)) {
@@ -782,21 +807,36 @@ switch ($action) {
             echo "[INFO]PIDファイルにプロセスが見つかりません\n";
         }
         
-        // ポート3000を使用している全プロセスを停止
+        // 2. ポート3000を使用している全プロセスを停止
         killPort3000Processes();
         
-        echo "[OK]停止処理が完了しました\n";
+        // 3. リバースプロキシ(nginx)停止
+        echo "\n--- リバースプロキシ停止 ---\n";
+        stopNginx();
+        
+        echo "\n[OK]Webサーバーの完全停止が完了しました\n";
+        echo "[INFO]再開するには「起動」ボタンを使用してください\n";
         break;
 
     case 'restart':
-        // 停止
+        echo "=== Webサーバー完全再起動 ===\n";
+        
+        // 1. Next.jsアプリ停止
+        echo "\n--- Next.jsアプリ停止 ---\n";
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
             posix_kill($pid, SIGTERM);
             unlink(PID_FILE);
-            echo "[OK] 停止しました (PID: $pid)\n";
+            echo "[OK] Next.jsアプリを停止しました (PID: $pid)\n";
+        } else {
+            echo "[INFO]Next.jsアプリは既に停止中\n";
         }
-        // 起動
+        
+        // 2. ポート3000強制停止
+        killPort3000Processes();
+        
+        // 3. Next.jsアプリ起動
+        echo "\n--- Next.jsアプリ起動 ---\n";
         chdir(NEXT_DIR);
         $cmd = sprintf(
             'nohup npm run start > %s 2>&1 & echo $!',
@@ -804,7 +844,14 @@ switch ($action) {
         );
         $pid = shell_exec($cmd);
         file_put_contents(PID_FILE, trim($pid));
-        echo "[OK] WEBアプリを再起動しました (PID: " . trim($pid) . ")\n";
+        echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
+        
+        // 4. リバースプロキシ再起動
+        echo "\n--- リバースプロキシ再起動 ---\n";
+        sleep(2); // Next.js起動待ち
+        restartNginx();
+        
+        echo "\n[OK]Webサーバーの完全再起動が完了しました\n";
         break;
 
     case 'status':

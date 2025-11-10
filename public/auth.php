@@ -1,10 +1,40 @@
 <?php
 
-// 認証用設定
-$realm = 'Next.js 管理ツール';
+// 環境変数から認証情報を読み込み
+function loadAuthConfig() {
+    $config = [];
+    
+    // 1. .env.authファイルから読み込み
+    $envAuthFile = __DIR__ . '/../.env.auth';
+    if (file_exists($envAuthFile)) {
+        $lines = file($envAuthFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos($line, '#') === 0) continue; // コメント行をスキップ
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $config[trim($key)] = trim($value, '"\'');
+            }
+        }
+    }
+    
+    // 2. 環境変数から読み込み（優先）
+    if (getenv('AUTH_USERNAME')) $config['AUTH_USERNAME'] = getenv('AUTH_USERNAME');
+    if (getenv('AUTH_PASSWORD')) $config['AUTH_PASSWORD'] = getenv('AUTH_PASSWORD');
+    if (getenv('AUTH_REALM')) $config['AUTH_REALM'] = getenv('AUTH_REALM');
+    
+    // 3. デフォルト値（フォールバック）
+    if (!isset($config['AUTH_USERNAME'])) $config['AUTH_USERNAME'] = 'admin';
+    if (!isset($config['AUTH_PASSWORD'])) $config['AUTH_PASSWORD'] = 'changeme';
+    if (!isset($config['AUTH_REALM'])) $config['AUTH_REALM'] = 'Next.js 管理ツール';
+    
+    return $config;
+}
+
+// 認証設定を読み込み
+$authConfig = loadAuthConfig();
+$realm = $authConfig['AUTH_REALM'];
 $users = [
-    // ユーザー名 => パスワード
-    'admin' => 'aimgstaff',
+    $authConfig['AUTH_USERNAME'] => $authConfig['AUTH_PASSWORD']
 ];
 
 // Digest 認証ヘッダーの送出
