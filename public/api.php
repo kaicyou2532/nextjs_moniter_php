@@ -1040,6 +1040,94 @@ switch ($action) {
         echo "[INFO]上記コマンドをターミナルで実行してください。\n";
         break;    
 
+    case 'deploy':
+        // デプロイ処理（Git更新 → 環境変数設定 → ビルド → 起動）
+        if ($isStreaming) {
+            echo "=== デプロイ開始 ===\n\n";
+            
+            // 1. GitHubから最新版を取得
+            echo "--- STEP 1: GitHubから最新版を取得 ---\n";
+            flush();
+            if (GitPull()) {
+                echo "[OK] 最新版の取得が完了しました\n\n";
+            } else {
+                echo "[ERR] 最新版の取得に失敗しました\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
+            
+            // 2. .envから環境変数を.env.localにコピー
+            echo "--- STEP 2: 環境変数を設定 ---\n";
+            flush();
+            $envSource = BASE_DIR . '/.env';
+            $envDest = NEXT_DIR . '/.env.local';
+            
+            if (file_exists($envSource)) {
+                if (copy($envSource, $envDest)) {
+                    echo "[OK] 環境変数ファイルを設定しました\n";
+                    echo "[INFO] " . $envSource . " → " . $envDest . "\n\n";
+                } else {
+                    echo "[WARN] 環境変数ファイルのコピーに失敗しました\n\n";
+                }
+            } else {
+                echo "[WARN] .envファイルが見つかりません\n";
+                echo "[INFO] デフォルト設定で続行します\n\n";
+            }
+            
+            // 3. ビルド実行
+            echo "--- STEP 3: ビルド実行 ---\n";
+            flush();
+            
+            if (!is_dir(NEXT_DIR)) {
+                echo "[ERR] Next.jsプロジェクトが見つかりません\n";
+                break;
+            }
+            
+            $buildCode = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
+            
+            if ($buildCode !== 0) {
+                echo "\n[ERR] ビルドに失敗しました (exit $buildCode)\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
+            
+            echo "\n[OK] ビルドが完了しました\n\n";
+            
+            // 4. Next.jsアプリケーション起動
+            echo "--- STEP 4: アプリケーション起動 ---\n";
+            flush();
+            
+            // 既存プロセスを停止
+            if (isRunning()) {
+                $pid = (int)trim(file_get_contents(PID_FILE));
+                posix_kill($pid, SIGTERM);
+                unlink(PID_FILE);
+                echo "[INFO] 既存プロセスを停止しました (PID: $pid)\n";
+            }
+            
+            killPort3000Processes();
+            
+            // 新しいプロセスを起動
+            chdir(NEXT_DIR);
+            $cmd = sprintf(
+                'nohup npm run start > %s 2>&1 & echo $!',
+                escapeshellarg(LOG_FILE)
+            );
+            $pid = shell_exec($cmd);
+            file_put_contents(PID_FILE, trim($pid));
+            echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n\n";
+            
+            // 5. nginx再起動
+            echo "--- STEP 5: リバースプロキシ再起動 ---\n";
+            flush();
+            sleep(2);
+            restartNginx();
+            
+            echo "\n=== デプロイ完了 ===\n";
+            echo "[OK] すべての処理が正常に完了しました\n";
+        }
+        break;
+
     case 'Renewal':
         echo "=== GitHubから最新版を取得 ===\n";
         if (GitPull()) {

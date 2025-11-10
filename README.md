@@ -184,24 +184,37 @@ AUTH_REALM=Next.js 管理ツール
 ## 環境変数設定 / Environment Variables
 
 ### Next.js 環境変数の管理
-管理画面から直接 Next.js の環境変数を設定できます:
+`.env` ファイルで Next.js の環境変数を管理します。デプロイ時に自動的に `next-app/.env.local` にコピーされます。
 
-1. **環境変数作成ボタン** をクリック
-2. 以下の形式で自動生成される `.env.local`:
+### 設定手順
+1. `.env.example` をコピーして `.env` ファイルを作成:
 ```bash
-MICROCMS_SERVICE_DOMAIN=your-service-domain
-MICROCMS_API_KEY=your-api-key
+cp .env.example .env
 ```
 
-3. 必要に応じて `next-app/.env.local` を手動編集
-
-### 環境変数テンプレート
-`next-app/.env.local.example` ファイルを作成してテンプレート化:
+2. `.env` ファイルを編集して実際の値を設定:
 ```bash
-MICROCMS_SERVICE_DOMAIN=
-MICROCMS_API_KEY=
-NEXT_PUBLIC_BASE_URL=
+# MicroCMS Settings
+MICROCMS_SERVICE_DOMAIN=learning-commons
+MICROCMS_API_KEY=your-actual-api-key
+MICROCMS_PREVIEW_SECRET=your-preview-secret
+
+# Google Analytics
+GA_ID=G-XXXXXXXXXX
 ```
+
+3. 管理画面の「🚀 デプロイ」ボタンをクリック
+   - 自動的に `.env` → `next-app/.env.local` にコピーされます
+   - ビルドと起動が実行されます
+
+### 環境変数の内容
+| 変数名 | 説明 | 例 |
+|--------|------|-----|
+| `MICROCMS_SERVICE_DOMAIN` | MicroCMSのサービスドメイン | `learning-commons` |
+| `MICROCMS_API_KEY` | MicroCMS APIキー | `your-api-key` |
+| `MICROCMS_PREVIEW_SECRET` | プレビュー用シークレット | `preview-secret` |
+| `GA_ID` | Google Analytics ID | `G-XXXXXXXXXX` |
+| `NODE_ENV` | 実行環境 | `production` |
 
 ---
 
@@ -251,24 +264,31 @@ http://your-server/
 ### 2. 基本操作
 | ボタン | 機能 | 説明 |
 |--------|------|------|
-| **ビルド** | npm run build | Next.js アプリケーションをビルド |
-| **起動** | npm run start | Next.js アプリケーションを起動 (ポート 3000) |
-| **停止** | プロセス終了 | 実行中の Next.js プロセスを停止 |
-| **再起動** | 停止 → 起動 | アプリケーションを再起動 |
-| **状態確認** | プロセス確認 | 現在の実行状態をチェック |
+| **🚀 デプロイ** | Git更新 → 環境変数設定 → ビルド → 起動 | すべてを自動実行 |
+| **⚠️ Webサーバー完全停止** | Next.js + nginx停止 | アプリとリバースプロキシを停止 |
+| **🔄 Webサーバー再起動** | 停止 → 起動 → nginx再起動 | アプリケーションを再起動 |
+| **📊 状態確認** | プロセス確認 | 現在の実行状態をチェック |
 
-### 3. 高度な機能
-- **Git Pull**: リポジトリから最新コードを取得
-- **環境変数作成**: `.env.local` ファイルを自動生成
-- **リアルタイムログ**: ストリーミング形式でログを監視
-- **デバッグ機能**: 詳細な実行情報を表示
+### 3. デプロイの流れ
+「🚀 デプロイ」ボタンをクリックすると、以下の処理が自動実行されます：
 
-### 4. 操作フロー例
-1. **Git Pull** でコードを最新化
-2. **環境変数作成** で設定ファイルを生成
-3. **ビルド** でアプリケーションをコンパイル
-4. **起動** でサービスを開始
-5. **ログ確認** で動作状況を監視
+1. **GitHubから最新版を取得** - リポジトリから最新コードをプル
+2. **環境変数を設定** - `.env` → `next-app/.env.local` にコピー
+3. **ビルド実行** - `npm run build` でアプリをコンパイル
+4. **アプリケーション起動** - Next.jsサーバーを起動
+5. **リバースプロキシ再起動** - nginxを再起動
+
+### 4. 初回セットアップ
+```bash
+# 1. 環境変数ファイルを作成
+cp .env.example .env
+nano .env  # 実際の値を設定
+
+# 2. 管理画面にアクセス
+http://your-server/
+
+# 3. デプロイボタンをクリック
+```
 
 ### 5. ログ監視
 - リアルタイムでログが自動更新
