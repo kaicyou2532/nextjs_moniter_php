@@ -475,6 +475,3 @@ docker-compose logs -f nextjs-monitor
 
 ---
 
-## ライセンス / License
-MIT License  
-© 2025 中村喜一

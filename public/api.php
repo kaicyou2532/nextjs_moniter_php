@@ -434,30 +434,60 @@ function startNextJsApp(): bool {
  * Next.js環境変数ファイルを作成
  */
 function createNextJsEnvFile() {
-    $envPath = "/var/www/html/next-app/.env.local";
-    $envBackupPath = "/var/www/html/env-backup.txt";
+    $envPath = NEXT_DIR . "/.env.local";
+    $envBackupPath = BASE_DIR . "/env-backup.txt";
     
-    // バックアップファイルから環境変数を復元
+    // 環境変数のデフォルト内容
+    $defaultEnvContent = "# Next.js環境変数設定\n";
+    $defaultEnvContent .= "# MicroCMSの設定\n";
+    $defaultEnvContent .= "MICROCMS_SERVICE_DOMAIN=your-service-domain\n";
+    $defaultEnvContent .= "MICROCMS_API_KEY=your-api-key\n";
+    $defaultEnvContent .= "\n# その他の設定\n";
+    $defaultEnvContent .= "NEXT_PUBLIC_BASE_URL=http://localhost:3000\n";
+    
+    // バックアップファイルから環境変数を復元、または デフォルト値を使用
     if (file_exists($envBackupPath)) {
         echo "[INFO]バックアップから環境変数を復元中...\n";
         $envContent = file_get_contents($envBackupPath);
+        if (empty($envContent)) {
+            echo "[WARN]バックアップファイルが空です。デフォルト設定を使用します。\n";
+            $envContent = $defaultEnvContent;
+        }
     } else {
-        echo "環境変数の設定に失敗しました。管理者に問い合わせてください。";
+        echo "[INFO]デフォルトの環境変数設定を使用します。\n";
+        $envContent = $defaultEnvContent;
+    }
+    
+    // ディレクトリの存在確認・作成
+    $envDir = dirname($envPath);
+    if (!is_dir($envDir)) {
+        echo "[INFO]ディレクトリを作成中: $envDir\n";
+        mkdir($envDir, 0755, true);
     }
     
     // ファイルを作成
-    if (file_put_contents($envPath, $envContent)) {
-        echo "[OK].env.localファイルを作成しました\n";
+    echo "[INFO]環境変数ファイルを作成中: $envPath\n";
+    $result = file_put_contents($envPath, $envContent);
+    
+    if ($result !== false) {
+        echo "[OK].env.localファイルを作成しました (サイズ: " . strlen($envContent) . " bytes)\n";
         
         // 環境変数をバックアップに保存
-        file_put_contents($envBackupPath, $envContent);
+        if (file_put_contents($envBackupPath, $envContent) !== false) {
+            echo "[INFO]バックアップファイルも更新しました\n";
+        }
         
         // パーミッション設定
-        chmod($envPath, 0644);
+        if (chmod($envPath, 0644)) {
+            echo "[INFO]ファイルパーミッションを設定しました (644)\n";
+        }
         
         return true;
     } else {
         echo "[ERROR].env.localファイルの作成に失敗しました\n";
+        echo "[DEBUG]書き込み先ディレクトリ: " . dirname($envPath) . "\n";
+        echo "[DEBUG]ディレクトリ書き込み権限: " . (is_writable(dirname($envPath)) ? "OK" : "NG") . "\n";
+        echo "[DEBUG]ディレクトリ存在確認: " . (is_dir(dirname($envPath)) ? "OK" : "NG") . "\n";
         return false;
     }
 }
@@ -912,14 +942,16 @@ switch ($action) {
         }
         
         // 環境変数ファイル作成
+        echo "=== Next.js 環境変数設定 ===\n";
         if (createNextJsEnvFile()) {
             echo "[OK] 環境変数ファイルを作成しました\n";
             
             // 環境変数ファイルの内容を表示
-            $envPath = "/var/www/html/next-app/.env.local";
+            $envPath = NEXT_DIR . "/.env.local";
             if (file_exists($envPath)) {
                 echo "\n-- .env.local の内容 --\n";
                 echo file_get_contents($envPath);
+                echo "\n-- ファイルパス: $envPath --\n";
             }
         } else {
             echo "[ERROR] 環境変数ファイルの作成に失敗しました\n";
