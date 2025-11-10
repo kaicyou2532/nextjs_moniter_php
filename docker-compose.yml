@@ -1,5 +1,3 @@
-version: '3.3'
-
 services:
   nextjs-monitor:
     build:
@@ -24,6 +22,9 @@ services:
       - GITURL=https://github.com/AIM-SC/next-website.git
       - HOME=/root
       - NPM_CONFIG_CACHE=/tmp/.npm
+      - TMPDIR=/tmp
+      - TMP=/tmp
+      - TEMP=/tmp
     restart: always
     working_dir: /var/www/html
     user: "0:0"

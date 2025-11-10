@@ -5,6 +5,9 @@ FROM php:8.3-apache
 ENV DEBIAN_FRONTEND=noninteractive
 ENV HOME=/root
 ENV NPM_CONFIG_CACHE=/tmp/.npm
+ENV TMPDIR=/tmp
+ENV TMP=/tmp
+ENV TEMP=/tmp
 
 # 基本パッケージのインストール
 RUN apt-get update && \
@@ -66,10 +69,11 @@ COPY .env* /var/www/html/
 RUN mkdir -p logs pids next-app && \
     chmod -R 755 logs pids next-app && \
     chown -R www-data:www-data /var/www/html && \
-    mkdir -p /var/run /var/log/nginx /var/log/supervisor /tmp && \
-    chown -R root:root /var/run /var/log/nginx /var/log/supervisor /tmp && \
+    mkdir -p /var/run /var/log/nginx /var/log/supervisor /tmp /var/tmp /usr/tmp && \
+    chown -R root:root /var/run /var/log/nginx /var/log/supervisor && \
     chmod 755 /var/run /var/log/nginx /var/log/supervisor && \
-    chmod 777 /tmp
+    chmod 1777 /tmp /var/tmp /usr/tmp && \
+    chown root:root /tmp /var/tmp /usr/tmp
 
 # ポートを公開
 EXPOSE 8080 80
