@@ -279,15 +279,41 @@ http://your-server/
 5. **リバースプロキシ再起動** - nginxを再起動
 
 ### 4. 初回セットアップ
+
+**ローカル環境の場合:**
 ```bash
-# 1. 環境変数ファイルを作成
+# 1. プロジェクトルートに .env ファイルを作成
+cd /path/to/nextjs_moniter_php
+cp .env.example .env
+
+# 2. 実際の値を設定
+nano .env
+# または
+cat > .env << 'EOF'
+MICROCMS_SERVICE_DOMAIN=learning-commons
+MICROCMS_API_KEY=your-actual-api-key
+MICROCMS_PREVIEW_SECRET=your-preview-secret
+GA_ID=G-XXXXXXXXXX
+NODE_ENV=production
+GITURL=https://github.com/AIM-SC/next-website.git
+EOF
+
+# 3. 管理画面にアクセスしてデプロイ
+```
+
+**Docker環境の場合:**
+```bash
+# 1. ホスト側で .env ファイルを作成
 cp .env.example .env
 nano .env  # 実際の値を設定
 
-# 2. 管理画面にアクセス
+# 2. コンテナを起動（.envは自動的にマウントされます）
+docker-compose up -d
+
+# 3. 管理画面にアクセス
 http://your-server/
 
-# 3. デプロイボタンをクリック
+# 4. デプロイボタンをクリック
 ```
 
 ### 5. ログ監視
