@@ -934,17 +934,78 @@ switch ($action) {
         }
         
         if ($isStreaming) {
-            echo "=== npm権限修正 ===\n";
+            echo "=== npm環境準備 ===\n";
             flush();
-            passthru('mkdir -p /tmp/.npm && chown -R www-data:www-data /tmp/.npm');
+            
+            // ローカルキャッシュディレクトリ作成
+            $localCache = NEXT_DIR . '/.npm-cache';
+            $localTmp = NEXT_DIR . '/.tmp';
+            
+            echo "[INFO]ローカルキャッシュディレクトリを準備中: $localCache\n";
+            passthru("mkdir -p $localCache $localTmp");
+            passthru("chmod -R 755 $localCache $localTmp");
+            
+            // EEXIST エラー対策: 既存キャッシュをクリア
+            echo "[INFO]既存キャッシュをクリア中...\n";
+            passthru("rm -rf $localCache/* $localTmp/* 2>/dev/null || true");
             
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
-            echo ($code === 0)
-                ? "\n[OK] 依存関係インストール完了\n"
-                : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
+            
+            // 環境変数を設定してnpm install実行
+            $envVars = [
+                'HOME=/root',
+                "TMPDIR=$localTmp",
+                "npm_config_cache=$localCache",
+                'npm_config_progress=false',
+                'npm_config_loglevel=info'
+            ];
+            $envString = implode(' ', $envVars);
+            $npmCommand = "$envString npm install --prefer-offline --no-audit --no-fund 2>&1";
+            
+            echo "[INFO]実行コマンド: npm install --prefer-offline --no-audit --no-fund\n";
+            echo "[INFO]キャッシュディレクトリ: $localCache\n";
+            echo "[INFO]一時ディレクトリ: $localTmp\n\n";
+            
+            $code = executeWithLiveOutput($npmCommand, NEXT_DIR);
+            
+            if ($code === 0) {
+                echo "\n[OK] 依存関係インストール完了\n";
+                echo "[INFO]キャッシュサイズ: ";
+                passthru("du -sh $localCache 2>/dev/null || echo '不明'");
+            } else {
+                echo "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
+                echo "\n=== トラブルシューティング ===\n";
+                echo "1. 手動でキャッシュクリア: rm -rf " . NEXT_DIR . "/.npm-cache/*\n";
+                echo "2. 手動でインストール試行: cd " . NEXT_DIR . " && npm install\n";
+                echo "3. npm バージョン確認: npm --version\n";
+                echo "4. Node.js バージョン確認: node --version\n";
+                
+                // エラーログの詳細表示
+                $errorLog = '/tmp/npm-debug*.log';
+                echo "\n[INFO]npmエラーログ確認:\n";
+                passthru("ls -la $errorLog 2>/dev/null && tail -20 $errorLog 2>/dev/null || echo 'エラーログが見つかりません'");
+            }
         }
+        break;
+
+    case 'manual-install':
+        echo "=== 手動npm install実行 ===\n";
+        
+        if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
+            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            break;
+        }
+        
+        echo "[INFO]手動インストールコマンド:\n\n";
+        echo "cd " . NEXT_DIR . "\n";
+        echo "export TMPDIR=\"\$(pwd)/.tmp\"\n";
+        echo "export npm_config_cache=\"\$(pwd)/.npm-cache\"\n";
+        echo "mkdir -p .tmp .npm-cache\n";
+        echo "rm -rf .npm-cache/* .tmp/* node_modules 2>/dev/null || true\n";
+        echo "npm install --prefer-offline --no-audit --no-fund\n\n";
+        
+        echo "[INFO]上記コマンドをターミナルで実行してください。\n";
         break;    
 
     case 'Renewal':

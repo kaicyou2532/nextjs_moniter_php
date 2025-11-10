@@ -372,14 +372,33 @@ cat .env.auth
 chmod 600 .env.auth
 ```
 
-#### 2. Next.js ビルドエラー
+#### 2. npm インストールエラー
+**問題**: EEXIST エラーや npm install が失敗する
+```bash
+# 解決方法
+cd next-app
+
+# 1. ローカルキャッシュクリア
+rm -rf .npm-cache .tmp node_modules
+
+# 2. 環境変数を設定して手動インストール
+export TMPDIR="$(pwd)/.tmp"
+export npm_config_cache="$(pwd)/.npm-cache"
+mkdir -p .tmp .npm-cache
+npm install --prefer-offline --no-audit --no-fund
+
+# 3. 権限問題の場合
+sudo chown -R $(whoami) .npm-cache .tmp node_modules
+```
+
+#### 3. Next.js ビルドエラー
 **問題**: npm run build が失敗する
 ```bash
 # 解決方法
 cd next-app
 
 # 1. 依存関係の再インストール
-rm -rf node_modules package-lock.json
+rm -rf node_modules package-lock.json .npm-cache
 npm install
 
 # 2. キャッシュクリア
