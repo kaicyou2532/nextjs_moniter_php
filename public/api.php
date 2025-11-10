@@ -622,7 +622,7 @@ switch ($action) {
     case 'build':
         // Next.jsディレクトリの存在確認
         if (!is_dir(NEXT_DIR) || !file_exists(NEXT_DIR . '/package.json')) {
-            echo "[WARN]Next.jsアプリが見つかりません。先に「GitHubから最新版を取得」を実行してください。\n";
+            echo "[WARN]Next.jsアプリが見つかりません。先に「[手順１]ウェブサーバーのデータを読み込み<」を実行してください。\n";
             break;
         }
         

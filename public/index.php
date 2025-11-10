@@ -180,11 +180,11 @@ require __DIR__ . '/auth.php';
       </div>
     </header>
     <div class="controls">
-      <button onclick="send('build')">ビルド(記事の公開)</button>
+      <button onclick="send('build')">[手順2]ビルド(記事の公開)</button>
       <button onclick="confirmStop()" style="background-color: #e74c3c;">⚠️ Webサーバー完全停止</button>
       <button onclick="send('restart')" >🔄 Webサーバー再起動</button>
-      <!-- <button onclick="send('Renewal')">GitHubから最新版を取得</button>
-      <button onclick="send('install')" style="background-color: #9b59b6;">📦 依存関係インストール</button>
+      <button onclick="send('Renewal')">[手順１]ウェブサーバーのデータを読み込み</button>
+      <!-- <button onclick="send('install')" style="background-color: #9b59b6;">📦 依存関係インストール</button>
       <button onclick="send('manual-install')" style="background-color: #34495e;">🔧 手動インストール手順</button> -->
       <button onclick="send('status')">状態確認</button>
       <!-- <button onclick="send('env')">環境変数設定</button>
