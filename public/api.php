@@ -43,19 +43,17 @@ function isRunning(): bool {
  * nginx を再起動
  */
 function restartNginx(): void {
-    echo "[INFO]nginx設定をチェック中...\n";
+    echo "[INFO]リバースプロキシ(nginx)を再起動中...\n";
     
-    // supervisorctl経由でnginx再起動（設定テストなし）
+    // Docker環境（supervisor使用）
     if (file_exists('/usr/bin/supervisorctl')) {
-        echo "[INFO]supervisorctlでnginxを停止中...\n";
-        passthru('supervisorctl stop nginx 2>&1', $stopCode);
+        // supervisorctl でnginx再起動（rootユーザーで実行）
+        echo "[INFO]supervisorctl経由でnginxを再起動...\n";
         
-        sleep(2);
+        // 再起動コマンド（stop + start の代わりに restart を使用）
+        passthru('supervisorctl restart nginx 2>&1', $restartCode);
         
-        echo "[INFO]supervisorctlでnginxを開始中...\n";
-        passthru('supervisorctl start nginx 2>&1', $startCode);
-        
-        if ($startCode === 0) {
+        if ($restartCode === 0) {
             echo "[OK]リバースプロキシを再起動しました\n";
             
             // 再起動後の状態確認
@@ -65,16 +63,25 @@ function restartNginx(): void {
             
             // ポート80の待ち受け確認
             echo "[INFO]ポート80の待ち受け確認:\n";
-            passthru('netstat -tlnp | grep :80 2>&1 || echo "ポート80で待ち受けしていません"');
+            passthru('ss -tlnp | grep :80 2>&1 || netstat -tlnp | grep :80 2>&1 || echo "ポート80で待ち受けしていません"');
         } else {
-            echo "[ERR]リバースプロキシの起動に失敗しました (exit $startCode)\n";
+            echo "[WARN]supervisorctl restart が失敗しました。nginx プロセスを直接再起動します...\n";
             
-            // エラーログを表示
-            echo "[INFO]nginxエラーログ:\n";
-            passthru('tail -10 /var/log/supervisor/nginx.err.log 2>/dev/null || echo "エラーログがありません"');
+            // 代替方法: nginx プロセスを直接操作
+            passthru('pkill -HUP nginx 2>&1 || nginx -s reload 2>&1', $reloadCode);
+            
+            if ($reloadCode === 0) {
+                echo "[OK]nginxを再読み込みしました\n";
+            } else {
+                echo "[ERR]nginxの再起動に失敗しました\n";
+                
+                // エラーログを表示
+                echo "[INFO]nginxエラーログ:\n";
+                passthru('tail -10 /var/log/nginx/error.log 2>/dev/null || tail -10 /var/log/supervisor/nginx*.log 2>/dev/null || echo "エラーログが見つかりません"');
+            }
         }
     } else {
-        // 従来のsystemctl（ホスト環境用）
+        // ホスト環境（systemctl使用）
         echo "[INFO]systemctlでnginxを再起動中...\n";
         passthru('systemctl restart nginx 2>&1', $code);
         echo ($code === 0)

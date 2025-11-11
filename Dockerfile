@@ -43,6 +43,9 @@ RUN mkdir -p /tmp/.npm /var/www/.npm && \
     chown -R www-data:www-data /tmp/.npm /var/www/.npm && \
     chmod -R 755 /tmp/.npm /var/www/.npm
 
+# www-dataユーザーにsupervisor操作権限を付与
+RUN usermod -a -G root www-data
+
 # Apacheポート設定（8080に変更）
 RUN sed -i 's/80/8080/g' /etc/apache2/ports.conf
 RUN sed -i 's/:80/:8080/g' /etc/apache2/sites-available/000-default.conf
