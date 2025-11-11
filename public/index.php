@@ -180,9 +180,9 @@ require __DIR__ . '/auth.php';
       </div>
     </header>
     <div class="controls">
-      <button onclick="send('deploy')" style="background-color: #27ae60;"> 記事更新・ビルド・公開</button>
-      <button onclick="send('restart')" style="background-color: #f39c12;">🔄 Webサーバー再起動(記事更新無し)</button>
-      <button onclick="confirmStop()" style="background-color: #e74c3c;">⚠️ Webサーバー停止</button>
+      <button onclick="send('deploy')" style="background-color: #27ae60;">🚀 記事更新・ビルド・公開</button>
+      <button onclick="send('restart')" style="background-color: #f39c12;">🔄 nginx再起動</button>
+      <button onclick="confirmStop()" style="background-color: #e74c3c;">⏸️ nginx停止</button>
       <button onclick="send('status')">📊 状態確認</button>
       <!-- <button onclick="send('debug')">Next.jsデバッグ</button>
       <button onclick="send('manual-start')">手動起動</button>
@@ -313,7 +313,7 @@ require __DIR__ . '/auth.php';
 
     // 停止確認ダイアログ
     function confirmStop() {
-      if (confirm('🚨 注意: この操作はNext.jsアプリケーションを停止します:\n\n• Next.jsアプリケーション (ポート3000)\n\n再開するには「🔄 Webサーバー再起動」ボタンを使用してください。\n\n本当に停止しますか？')) {
+      if (confirm('⚠️ 注意: この操作はリバースプロキシ(nginx)を停止します:\n\n• 外部からのアクセス (ポート80) が停止されます\n• Next.jsアプリは稼働を継続します (ポート3000で直接アクセス可能)\n\n再開するには「🔄 nginx再起動」ボタンを使用してください。\n\n本当に停止しますか？')) {
         send('stop');
       }
     }

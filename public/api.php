@@ -828,77 +828,30 @@ switch ($action) {
         break;
 
     case 'stop':
-        echo "=== Webサーバー完全停止 ===\n";
+        echo "=== Webサーバー停止 ===\n";
+        echo "[INFO]リバースプロキシ(nginx)のみを停止します\n";
+        echo "[INFO]Next.jsアプリケーションは稼働を継続します\n\n";
         
-        // 1. Next.jsアプリ停止
-        echo "\n--- Next.jsアプリ停止 ---\n";
-        if (isRunning()) {
-            $pid = (int)trim(file_get_contents(PID_FILE));
-            if ($pid > 0 && posix_kill($pid, SIGTERM)) {
-                unlink(PID_FILE);
-                echo "[OK]Next.jsアプリを停止しました (PID: $pid)\n";
-            } else {
-                echo "[ERR]プロセス停止に失敗しました\n";
-            }
-        } else {
-            echo "[INFO]PIDファイルにプロセスが見つかりません\n";
-        }
-        
-        // 2. ポート3000を使用している全プロセスを停止
-        killPort3000Processes();
-        
-        // 3. nginx停止
-        echo "\n--- リバースプロキシ停止 ---\n";
+        // nginx停止
+        echo "--- リバースプロキシ停止 ---\n";
         stopNginx();
         
-        echo "\n[OK]Webサーバーの完全停止が完了しました\n";
+        echo "\n[OK]Webサーバーの停止が完了しました\n";
+        echo "[INFO]Next.jsアプリは http://localhost:3000 で直接アクセス可能です\n";
         echo "[INFO]再開するには「🔄 Webサーバー再起動」ボタンを使用してください\n";
         break;
 
     case 'restart':
         echo "=== Webサーバー再起動 ===\n";
-        echo "[INFO]ビルド済みアプリケーションを再起動します\n\n";
+        echo "[INFO]リバースプロキシ(nginx)のみを再起動します\n";
+        echo "[INFO]Next.jsアプリケーションは稼働を継続します\n\n";
         
-        // 1. Next.jsアプリ停止
-        echo "--- Next.jsアプリ停止 ---\n";
-        if (isRunning()) {
-            $pid = (int)trim(file_get_contents(PID_FILE));
-            posix_kill($pid, SIGTERM);
-            unlink(PID_FILE);
-            echo "[OK] Next.jsアプリを停止しました (PID: $pid)\n";
-        } else {
-            echo "[INFO]Next.jsアプリは既に停止中\n";
-        }
-        
-        // 2. ポート3000強制停止
-        killPort3000Processes();
-        
-        // 3. ビルドファイルの確認
-        echo "\n--- ビルド確認 ---\n";
-        if (!is_dir(NEXT_DIR . '/.next')) {
-            echo "[ERR].nextディレクトリが見つかりません\n";
-            echo "[INFO]先にデプロイを実行してビルドを完了してください\n";
-            break;
-        }
-        echo "[OK]ビルド済みファイルを確認しました\n";
-        
-        // 4. Next.jsアプリ起動 (npm run start)
-        echo "\n--- Next.jsアプリ起動 ---\n";
-        chdir(NEXT_DIR);
-        $cmd = sprintf(
-            'nohup npm run start > %s 2>&1 & echo $!',
-            escapeshellarg(LOG_FILE)
-        );
-        $pid = shell_exec($cmd);
-        file_put_contents(PID_FILE, trim($pid));
-        echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
-        
-        // 5. nginx再起動
-        echo "\n--- リバースプロキシ再起動 ---\n";
+        // nginx再起動
+        echo "--- リバースプロキシ再起動 ---\n";
         restartNginx();
         
         echo "\n[OK]Webサーバーの再起動が完了しました\n";
-        echo "[INFO]アプリケーションは http://localhost:3000 で稼働中です\n";
+        echo "[INFO]リバースプロキシは http://localhost (ポート80) で稼働中です\n";
         break;
 
     case 'status':
@@ -1091,14 +1044,35 @@ switch ($action) {
                 echo "[INFO] デフォルト設定で続行します\n\n";
             }
             
-            // 3. ビルド実行
-            echo "--- STEP 3: ビルド実行 ---\n";
+            // 3. キャッシュクリア
+            echo "--- STEP 3: キャッシュクリア ---\n";
             flush();
             
             if (!is_dir(NEXT_DIR)) {
                 echo "[ERR] Next.jsプロジェクトが見つかりません\n";
                 break;
             }
+            
+            echo "[INFO] 古いビルドキャッシュを削除中...\n";
+            $cleanCommands = [
+                'rm -rf .next',
+                'rm -rf node_modules/.cache',
+                'rm -rf .npm-cache/.tmp',
+                'npm cache clean --force 2>&1'
+            ];
+            
+            chdir(NEXT_DIR);
+            foreach ($cleanCommands as $cmd) {
+                $output = shell_exec($cmd);
+                if ($output) {
+                    echo $output;
+                }
+            }
+            echo "[OK] キャッシュクリアが完了しました\n\n";
+            
+            // 4. ビルド実行
+            echo "--- STEP 4: ビルド実行 ---\n";
+            flush();
             
             $buildCode = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
             
@@ -1110,8 +1084,8 @@ switch ($action) {
             
             echo "\n[OK] ビルドが完了しました\n\n";
             
-            // 4. Next.jsアプリケーション起動
-            echo "--- STEP 4: アプリケーション起動 ---\n";
+            // 5. Next.jsアプリケーション起動
+            echo "--- STEP 5: アプリケーション起動 ---\n";
             flush();
             
             // 既存プロセスを停止
@@ -1134,8 +1108,8 @@ switch ($action) {
             file_put_contents(PID_FILE, trim($pid));
             echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n\n";
             
-            // 5. nginx再起動
-            echo "--- STEP 5: リバースプロキシ再起動 ---\n";
+            // 6. nginx再起動
+            echo "--- STEP 6: リバースプロキシ再起動 ---\n";
             flush();
             sleep(2);
             restartNginx();
