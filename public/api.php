@@ -831,7 +831,7 @@ switch ($action) {
         echo "=== Webサーバー完全停止 ===\n";
         
         // 1. Next.jsアプリ停止
-        echo "--- Next.jsアプリ停止 ---\n";
+        echo "\n--- Next.jsアプリ停止 ---\n";
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
             if ($pid > 0 && posix_kill($pid, SIGTERM)) {
@@ -847,7 +847,11 @@ switch ($action) {
         // 2. ポート3000を使用している全プロセスを停止
         killPort3000Processes();
         
-        echo "\n[OK]Webサーバーの停止が完了しました\n";
+        // 3. nginx停止
+        echo "\n--- リバースプロキシ停止 ---\n";
+        stopNginx();
+        
+        echo "\n[OK]Webサーバーの完全停止が完了しました\n";
         echo "[INFO]再開するには「🔄 Webサーバー再起動」ボタンを使用してください\n";
         break;
 
@@ -888,6 +892,10 @@ switch ($action) {
         $pid = shell_exec($cmd);
         file_put_contents(PID_FILE, trim($pid));
         echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
+        
+        // 5. nginx再起動
+        echo "\n--- リバースプロキシ再起動 ---\n";
+        restartNginx();
         
         echo "\n[OK]Webサーバーの再起動が完了しました\n";
         echo "[INFO]アプリケーションは http://localhost:3000 で稼働中です\n";
