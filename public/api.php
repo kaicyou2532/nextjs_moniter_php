@@ -824,7 +824,7 @@ switch ($action) {
         echo "=== Webサーバー完全停止 ===\n";
         
         // 1. Next.jsアプリ停止
-        echo "\n--- Next.jsアプリ停止 ---\n";
+        echo "--- Next.jsアプリ停止 ---\n";
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
             if ($pid > 0 && posix_kill($pid, SIGTERM)) {
@@ -840,19 +840,16 @@ switch ($action) {
         // 2. ポート3000を使用している全プロセスを停止
         killPort3000Processes();
         
-        // 3. リバースプロキシ(nginx)停止
-        echo "\n--- リバースプロキシ停止 ---\n";
-        stopNginx();
-        
-        echo "\n[OK]Webサーバーの完全停止が完了しました\n";
-        echo "[INFO]再開するには「起動」ボタンを使用してください\n";
+        echo "\n[OK]Webサーバーの停止が完了しました\n";
+        echo "[INFO]再開するには「🔄 Webサーバー再起動」ボタンを使用してください\n";
         break;
 
     case 'restart':
-        echo "=== Webサーバー完全再起動 ===\n";
+        echo "=== Webサーバー再起動 ===\n";
+        echo "[INFO]ビルド済みアプリケーションを再起動します\n\n";
         
         // 1. Next.jsアプリ停止
-        echo "\n--- Next.jsアプリ停止 ---\n";
+        echo "--- Next.jsアプリ停止 ---\n";
         if (isRunning()) {
             $pid = (int)trim(file_get_contents(PID_FILE));
             posix_kill($pid, SIGTERM);
@@ -865,7 +862,16 @@ switch ($action) {
         // 2. ポート3000強制停止
         killPort3000Processes();
         
-        // 3. Next.jsアプリ起動
+        // 3. ビルドファイルの確認
+        echo "\n--- ビルド確認 ---\n";
+        if (!is_dir(NEXT_DIR . '/.next')) {
+            echo "[ERR].nextディレクトリが見つかりません\n";
+            echo "[INFO]先にデプロイを実行してビルドを完了してください\n";
+            break;
+        }
+        echo "[OK]ビルド済みファイルを確認しました\n";
+        
+        // 4. Next.jsアプリ起動 (npm run start)
         echo "\n--- Next.jsアプリ起動 ---\n";
         chdir(NEXT_DIR);
         $cmd = sprintf(
@@ -876,12 +882,8 @@ switch ($action) {
         file_put_contents(PID_FILE, trim($pid));
         echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
         
-        // 4. リバースプロキシ再起動
-        echo "\n--- リバースプロキシ再起動 ---\n";
-        sleep(2); // Next.js起動待ち
-        restartNginx();
-        
-        echo "\n[OK]Webサーバーの完全再起動が完了しました\n";
+        echo "\n[OK]Webサーバーの再起動が完了しました\n";
+        echo "[INFO]アプリケーションは http://localhost:3000 で稼働中です\n";
         break;
 
     case 'status':
