@@ -1084,19 +1084,49 @@ switch ($action) {
             
             echo "\n[OK] ビルドが完了しました\n\n";
             
-            // 5. Next.jsアプリケーション起動
-            echo "--- STEP 5: アプリケーション起動 ---\n";
+            // 5. Next.jsアプリケーション完全停止
+            echo "--- STEP 5: 既存アプリケーション完全停止 ---\n";
             flush();
             
             // 既存プロセスを停止
             if (isRunning()) {
                 $pid = (int)trim(file_get_contents(PID_FILE));
+                echo "[INFO] 既存プロセスにSIGTERMを送信中 (PID: $pid)...\n";
                 posix_kill($pid, SIGTERM);
-                unlink(PID_FILE);
-                echo "[INFO] 既存プロセスを停止しました (PID: $pid)\n";
+                sleep(2);
+                
+                // まだ生きている場合はSIGKILL
+                if (posix_kill($pid, 0)) {
+                    echo "[WARN] プロセスが終了しないためSIGKILLを送信...\n";
+                    posix_kill($pid, SIGKILL);
+                    sleep(1);
+                }
+                
+                if (file_exists(PID_FILE)) {
+                    unlink(PID_FILE);
+                }
+                echo "[OK] 既存プロセスを停止しました (PID: $pid)\n";
+            } else {
+                echo "[INFO] 実行中のプロセスはありません\n";
             }
             
+            // ポート3000の完全クリーンアップ
+            echo "[INFO] ポート3000の全プロセスを停止中...\n";
             killPort3000Processes();
+            sleep(2);
+            
+            // 停止確認
+            exec("lsof -ti:3000 2>/dev/null", $portCheck, $portCode);
+            if ($portCode === 0 && !empty($portCheck)) {
+                echo "[WARN] まだポート3000が使用中です。強制終了します...\n";
+                exec("kill -9 " . implode(' ', $portCheck) . " 2>/dev/null");
+                sleep(1);
+            }
+            echo "[OK] ポート3000のクリーンアップ完了\n\n";
+            
+            // 6. Next.jsアプリケーション起動
+            echo "--- STEP 6: アプリケーション起動 ---\n";
+            flush();
             
             // 新しいプロセスを起動
             chdir(NEXT_DIR);
@@ -1106,12 +1136,40 @@ switch ($action) {
             );
             $pid = shell_exec($cmd);
             file_put_contents(PID_FILE, trim($pid));
-            echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n\n";
+            echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
             
-            // 6. nginx再起動
-            echo "--- STEP 6: リバースプロキシ再起動 ---\n";
+            // 起動確認（最大10秒待機）
+            echo "[INFO] アプリケーションの起動を確認中...\n";
+            $maxWait = 10;
+            $waited = 0;
+            $started = false;
+            
+            while ($waited < $maxWait) {
+                sleep(1);
+                $waited++;
+                
+                // ポート3000がリッスンしているか確認
+                exec("lsof -ti:3000 2>/dev/null", $output, $code);
+                if ($code === 0 && !empty($output)) {
+                    $started = true;
+                    echo "[OK] アプリケーションが起動しました ({$waited}秒)\n";
+                    break;
+                }
+                
+                if ($waited % 2 === 0) {
+                    echo "[INFO] 起動待機中... ({$waited}/{$maxWait}秒)\n";
+                }
+            }
+            
+            if (!$started) {
+                echo "[WARN] 起動確認がタイムアウトしましたが続行します\n";
+            }
+            
+            echo "\n";
+            
+            // 7. nginx再起動
+            echo "--- STEP 7: リバースプロキシ再起動 ---\n";
             flush();
-            sleep(2);
             restartNginx();
             
             echo "\n=== デプロイ完了 ===\n";

@@ -469,7 +469,87 @@ kill -9 <PID>
 # 管理画面の「停止」ボタンを使用
 ```
 
-#### 4. Docker 関連エラー
+#### 4. ChunkLoadError - Next.jsファイル読み込みエラー
+**問題**: ブラウザコンソールに `ChunkLoadError: Loading chunk XXX failed` が表示される
+```
+ChunkLoadError: Loading chunk 334 failed.
+(error: http://example.com/_next/static/chunks/...)
+```
+
+**原因**:
+- Next.jsのビルドキャッシュの不整合
+- デプロイ中のアクセス
+- ブラウザキャッシュの古いファイル
+- nginx のキャッシュ設定
+
+**解決方法**:
+
+1. **完全再デプロイ** (最も効果的)
+   ```bash
+   # 管理画面で「🚀 記事更新・ビルド・公開」ボタンをクリック
+   # 以下が自動実行されます:
+   # - Git更新
+   # - 環境変数設定
+   # - キャッシュクリア (.next, node_modules/.cache, npm cache)
+   # - ビルド実行
+   # - Next.js完全再起動 (既存プロセス強制終了 → 新規起動)
+   # - nginx再起動
+   ```
+
+2. **ブラウザキャッシュクリア**
+   ```bash
+   # Chrome/Edge: Ctrl + Shift + R (Mac: Cmd + Shift + R)
+   # Firefox: Ctrl + F5 (Mac: Cmd + Shift + R)
+   # または、シークレット/プライベートモードで開く
+   ```
+
+3. **手動での完全クリーンアップ** (Dockerコンテナ内)
+   ```bash
+   # コンテナに入る
+   docker exec -it nextjs-monitor-php-new bash
+   
+   # Next.jsディレクトリに移動
+   cd /var/www/html/next-app
+   
+   # キャッシュ完全削除
+   rm -rf .next node_modules/.cache .npm-cache .tmp
+   npm cache clean --force
+   
+   # 依存関係再インストール
+   export TMPDIR="$(pwd)/.tmp"
+   export npm_config_cache="$(pwd)/.npm-cache"
+   mkdir -p .tmp .npm-cache
+   npm install
+   
+   # 再ビルド
+   npm run build
+   
+   # プロセス停止
+   pkill -9 -f "next start"
+   fuser -k 3000/tcp
+   
+   # 再起動
+   npm run start
+   
+   exit
+   
+   # nginx再起動
+   # 管理画面で「🔄 nginx再起動」ボタンをクリック
+   ```
+
+4. **nginx設定の確認**
+   ```bash
+   # nginx設定にキャッシュ制御が含まれているか確認
+   docker exec -it nextjs-monitor-php-new nginx -t
+   docker exec -it nextjs-monitor-php-new cat /etc/nginx/nginx.conf
+   ```
+
+**予防策**:
+- デプロイ時は必ず「🚀 記事更新・ビルド・公開」を使用（キャッシュクリア機能付き）
+- ブラウザで開発者ツールの「Disable cache」を有効化して動作確認
+- nginx設定で `/_next/static/` のキャッシュ制御が適切に設定されていることを確認
+
+#### 5. Docker 関連エラー
 **問題**: ContainerConfig エラー
 ```bash
 # 解決方法
@@ -484,7 +564,22 @@ docker-compose up --build --force-recreate
 docker volume ls
 ```
 
-#### 5. ファイルパーミッションエラー
+#### 5. Docker 関連エラー
+**問題**: ContainerConfig エラー
+```bash
+# 解決方法
+# 1. Docker Compose ファイル確認
+docker-compose config
+
+# 2. イメージ再ビルド
+docker-compose down
+docker-compose up --build --force-recreate
+
+# 3. ボリューム確認
+docker volume ls
+```
+
+#### 6. ファイルパーミッションエラー
 **問題**: ログファイル書き込み不可
 ```bash
 # 解決方法
