@@ -1087,8 +1087,8 @@ switch ($action) {
                 echo "[INFO] デフォルト設定で続行します\n\n";
             }
             
-            // 3. キャッシュクリア
-            echo "--- STEP 3: キャッシュクリア ---\n";
+            // 3. 完全クリーンアップ（node_modules含む）
+            echo "--- STEP 3: 完全クリーンアップ ---\n";
             flush();
             
             if (!is_dir(NEXT_DIR)) {
@@ -1098,48 +1098,95 @@ switch ($action) {
             
             chdir(NEXT_DIR);
             
-            echo "[INFO] 古いビルドキャッシュを削除中...\n";
+            echo "[WARN] Next.jsアプリを完全にクリーンアップします\n";
+            echo "[INFO] node_modules、.next、キャッシュを全て削除します...\n\n";
             
-            // .nextディレクトリの完全削除
-            if (is_dir('.next')) {
-                echo "[INFO] .nextディレクトリを削除...\n";
-                passthru('rm -rf .next 2>&1', $rmCode);
-                if ($rmCode === 0 && !is_dir('.next')) {
-                    echo "[OK] .nextディレクトリを削除しました\n";
+            // 削除対象のディレクトリ/ファイルリスト
+            $toDelete = [
+                '.next' => '.nextディレクトリ（ビルド成果物）',
+                'node_modules' => 'node_modulesディレクトリ（依存関係）',
+                '.npm-cache' => 'npmキャッシュ',
+                '.tmp' => '一時ファイル',
+                'package-lock.json' => 'package-lock.json（ロックファイル）'
+            ];
+            
+            foreach ($toDelete as $path => $description) {
+                if (file_exists($path)) {
+                    echo "[INFO] $description を削除中...\n";
+                    if (is_dir($path)) {
+                        passthru("rm -rf $path 2>&1", $code);
+                    } else {
+                        passthru("rm -f $path 2>&1", $code);
+                    }
+                    
+                    if ($code === 0 && !file_exists($path)) {
+                        echo "[OK] $description を削除しました\n";
+                    } else {
+                        echo "[WARN] $description の削除に失敗しました（続行します）\n";
+                    }
                 } else {
-                    echo "[WARN] .nextディレクトリの削除に失敗しました\n";
+                    echo "[INFO] $description は存在しません（スキップ）\n";
                 }
-            } else {
-                echo "[INFO] .nextディレクトリは存在しません\n";
             }
             
-            // node_modules/.cacheの削除
-            if (is_dir('node_modules/.cache')) {
-                echo "[INFO] node_modules/.cacheを削除...\n";
-                passthru('rm -rf node_modules/.cache 2>&1');
-                echo "[OK] node_modules/.cacheを削除しました\n";
-            }
-            
-            // npmキャッシュクリア
-            echo "[INFO] npmキャッシュをクリーン...\n";
-            passthru('rm -rf .npm-cache .tmp 2>&1');
+            // npmグローバルキャッシュもクリア
+            echo "\n[INFO] npmグローバルキャッシュをクリーン...\n";
             passthru('npm cache clean --force 2>&1', $cacheCode);
             if ($cacheCode === 0) {
                 echo "[OK] npmキャッシュをクリアしました\n";
             }
             
             // 削除確認
-            $cacheExists = is_dir('.next') || is_dir('node_modules/.cache');
-            if ($cacheExists) {
-                echo "[WARN] 一部のキャッシュが残っていますが続行します\n";
+            echo "\n[INFO] クリーンアップ結果を確認中...\n";
+            $remainingIssues = [];
+            if (is_dir('.next')) $remainingIssues[] = '.next';
+            if (is_dir('node_modules')) $remainingIssues[] = 'node_modules';
+            
+            if (empty($remainingIssues)) {
+                echo "[OK] すべてのキャッシュとビルド成果物を削除しました\n";
             } else {
-                echo "[OK] すべてのキャッシュを削除しました\n";
+                echo "[WARN] 一部のファイルが残っています: " . implode(', ', $remainingIssues) . "\n";
+                echo "[INFO] 続行しますが、問題が発生する可能性があります\n";
             }
             
             echo "\n";
             
-            // 4. ビルド実行
-            echo "--- STEP 4: ビルド実行 ---\n";
+            // 4. 依存関係の再インストール
+            echo "--- STEP 4: 依存関係の再インストール ---\n";
+            flush();
+            
+            echo "[INFO] package.jsonから依存関係を再インストール中...\n";
+            echo "[INFO] これには数分かかる場合があります...\n\n";
+            
+            // npm install with environment variables
+            $installCmd = 'export TMPDIR="$(pwd)/.tmp" && ' .
+                         'export npm_config_cache="$(pwd)/.npm-cache" && ' .
+                         'mkdir -p .tmp .npm-cache && ' .
+                         'npm install --prefer-offline --no-audit --no-fund 2>&1';
+            
+            $installCode = executeWithLiveOutput($installCmd, NEXT_DIR);
+            
+            if ($installCode !== 0) {
+                echo "\n[ERR] 依存関係のインストールに失敗しました (exit $installCode)\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
+            
+            echo "\n[OK] 依存関係のインストールが完了しました\n";
+            
+            // node_modules確認
+            if (is_dir('node_modules') && is_dir('node_modules/.bin')) {
+                echo "[OK] node_modulesが正常に生成されました\n";
+            } else {
+                echo "[ERR] node_modulesの生成に失敗しました\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
+            
+            echo "\n";
+            
+            // 5. ビルド実行
+            echo "--- STEP 5: ビルド実行 ---\n";
             flush();
             
             $buildCode = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
@@ -1184,8 +1231,8 @@ switch ($action) {
             
             echo "\n";
             
-            // 5. Next.jsアプリケーション完全停止
-            echo "--- STEP 5: 既存アプリケーション完全停止 ---\n";
+            // 6. Next.jsアプリケーション完全停止
+            echo "--- STEP 6: 既存アプリケーション完全停止 ---\n";
             flush();
             
             // 既存プロセスを停止
@@ -1233,8 +1280,8 @@ switch ($action) {
             
             echo "\n";
             
-            // 6. Next.jsアプリケーション起動
-            echo "--- STEP 6: アプリケーション起動 ---\n";
+            // 7. Next.jsアプリケーション起動
+            echo "--- STEP 7: アプリケーション起動 ---\n";
             flush();
             
             // 新しいプロセスを起動
@@ -1300,13 +1347,14 @@ switch ($action) {
             
             echo "\n";
             
-            // 7. nginx再起動
-            echo "--- STEP 7: リバースプロキシ再起動 ---\n";
+            // 8. nginx再起動
+            echo "--- STEP 8: リバースプロキシ再起動 ---\n";
             flush();
             restartNginx();
             
             echo "\n=== デプロイ完了 ===\n";
             echo "[OK] すべての処理が正常に完了しました\n";
+            echo "[INFO] アプリケーションは http://localhost で公開されています\n";
         }
         break;
 
