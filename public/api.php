@@ -1053,22 +1053,47 @@ switch ($action) {
                 break;
             }
             
-            echo "[INFO] 古いビルドキャッシュを削除中...\n";
-            $cleanCommands = [
-                'rm -rf .next',
-                'rm -rf node_modules/.cache',
-                'rm -rf .npm-cache/.tmp',
-                'npm cache clean --force 2>&1'
-            ];
-            
             chdir(NEXT_DIR);
-            foreach ($cleanCommands as $cmd) {
-                $output = shell_exec($cmd);
-                if ($output) {
-                    echo $output;
+            
+            echo "[INFO] 古いビルドキャッシュを削除中...\n";
+            
+            // .nextディレクトリの完全削除
+            if (is_dir('.next')) {
+                echo "[INFO] .nextディレクトリを削除...\n";
+                passthru('rm -rf .next 2>&1', $rmCode);
+                if ($rmCode === 0 && !is_dir('.next')) {
+                    echo "[OK] .nextディレクトリを削除しました\n";
+                } else {
+                    echo "[WARN] .nextディレクトリの削除に失敗しました\n";
                 }
+            } else {
+                echo "[INFO] .nextディレクトリは存在しません\n";
             }
-            echo "[OK] キャッシュクリアが完了しました\n\n";
+            
+            // node_modules/.cacheの削除
+            if (is_dir('node_modules/.cache')) {
+                echo "[INFO] node_modules/.cacheを削除...\n";
+                passthru('rm -rf node_modules/.cache 2>&1');
+                echo "[OK] node_modules/.cacheを削除しました\n";
+            }
+            
+            // npmキャッシュクリア
+            echo "[INFO] npmキャッシュをクリーン...\n";
+            passthru('rm -rf .npm-cache .tmp 2>&1');
+            passthru('npm cache clean --force 2>&1', $cacheCode);
+            if ($cacheCode === 0) {
+                echo "[OK] npmキャッシュをクリアしました\n";
+            }
+            
+            // 削除確認
+            $cacheExists = is_dir('.next') || is_dir('node_modules/.cache');
+            if ($cacheExists) {
+                echo "[WARN] 一部のキャッシュが残っていますが続行します\n";
+            } else {
+                echo "[OK] すべてのキャッシュを削除しました\n";
+            }
+            
+            echo "\n";
             
             // 4. ビルド実行
             echo "--- STEP 4: ビルド実行 ---\n";
@@ -1082,7 +1107,39 @@ switch ($action) {
                 break;
             }
             
-            echo "\n[OK] ビルドが完了しました\n\n";
+            echo "\n[OK] ビルドが完了しました\n";
+            
+            // ビルド結果の確認
+            echo "[INFO] ビルド成果物を確認中...\n";
+            if (is_dir('.next')) {
+                // ビルドIDの確認
+                if (file_exists('.next/BUILD_ID')) {
+                    $buildId = trim(file_get_contents('.next/BUILD_ID'));
+                    echo "[OK] ビルドID: $buildId\n";
+                }
+                
+                // 主要ディレクトリの確認
+                $requiredDirs = ['.next/static', '.next/server', '.next/cache'];
+                $allExists = true;
+                foreach ($requiredDirs as $dir) {
+                    if (!is_dir($dir)) {
+                        echo "[WARN] $dir が見つかりません\n";
+                        $allExists = false;
+                    }
+                }
+                
+                if ($allExists) {
+                    echo "[OK] すべてのビルド成果物が正常に生成されました\n";
+                } else {
+                    echo "[WARN] 一部のビルド成果物が不足していますが続行します\n";
+                }
+            } else {
+                echo "[ERR] .nextディレクトリが生成されませんでした\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
+            
+            echo "\n";
             
             // 5. Next.jsアプリケーション完全停止
             echo "--- STEP 5: 既存アプリケーション完全停止 ---\n";
@@ -1138,11 +1195,12 @@ switch ($action) {
             file_put_contents(PID_FILE, trim($pid));
             echo "[OK] Next.jsアプリを起動しました (PID: " . trim($pid) . ")\n";
             
-            // 起動確認（最大10秒待機）
+            // 起動確認（最大20秒待機）
             echo "[INFO] アプリケーションの起動を確認中...\n";
-            $maxWait = 10;
+            $maxWait = 20;
             $waited = 0;
             $started = false;
+            $ready = false;
             
             while ($waited < $maxWait) {
                 sleep(1);
@@ -1151,19 +1209,42 @@ switch ($action) {
                 // ポート3000がリッスンしているか確認
                 exec("lsof -ti:3000 2>/dev/null", $output, $code);
                 if ($code === 0 && !empty($output)) {
-                    $started = true;
-                    echo "[OK] アプリケーションが起動しました ({$waited}秒)\n";
-                    break;
+                    if (!$started) {
+                        $started = true;
+                        echo "[OK] ポート3000がリッスン開始 ({$waited}秒)\n";
+                    }
+                    
+                    // HTTPレスポンスを確認
+                    $httpCode = @file_get_contents('http://localhost:3000', false, stream_context_create([
+                        'http' => [
+                            'timeout' => 2,
+                            'ignore_errors' => true
+                        ]
+                    ]));
+                    
+                    if ($httpCode !== false) {
+                        $ready = true;
+                        echo "[OK] アプリケーションが完全に起動しました ({$waited}秒)\n";
+                        break;
+                    }
                 }
                 
-                if ($waited % 2 === 0) {
+                if ($waited % 3 === 0) {
                     echo "[INFO] 起動待機中... ({$waited}/{$maxWait}秒)\n";
+                    flush();
                 }
             }
             
             if (!$started) {
-                echo "[WARN] 起動確認がタイムアウトしましたが続行します\n";
+                echo "[ERR] アプリケーションの起動に失敗しました\n";
+                echo "[INFO] ログを確認してください: " . LOG_FILE . "\n";
+            } elseif (!$ready) {
+                echo "[WARN] HTTPレスポンスの確認がタイムアウトしましたが続行します\n";
             }
+            
+            // 追加の安定化待機
+            echo "[INFO] 安定化を待機中...\n";
+            sleep(3);
             
             echo "\n";
             

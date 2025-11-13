@@ -181,8 +181,8 @@ require __DIR__ . '/auth.php';
     </header>
     <div class="controls">
       <button onclick="send('deploy')" style="background-color: #27ae60;">🚀 記事更新・ビルド・公開</button>
-      <button onclick="send('restart')" style="background-color: #f39c12;">🔄 ウェブサイト再起動</button>
-      <button onclick="confirmStop()" style="background-color: #e74c3c;">⏸️ ウェブサイト公開停止</button>
+      <button onclick="send('restart')" style="background-color: #f39c12;">🔄 nginx再起動</button>
+      <button onclick="confirmStop()" style="background-color: #e74c3c;">⏸️ nginx停止</button>
       <button onclick="send('status')">📊 状態確認</button>
       <!-- <button onclick="send('debug')">Next.jsデバッグ</button>
       <button onclick="send('manual-start')">手動起動</button>
