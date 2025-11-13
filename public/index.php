@@ -97,10 +97,16 @@ require __DIR__ . '/auth.php';
       box-shadow: 0 2px 6px rgba(217, 174, 76, 0.2);
     }
     button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
+      background: #ccc !important;
+      color: #666 !important;
+      cursor: not-allowed !important;
+      transform: none !important;
+      box-shadow: none !important;
+      opacity: 0.5 !important;
+      pointer-events: none;
+    }
+    button:disabled:hover {
+      transform: none !important;
     }
     button.loading {
       background: #b8943a;
@@ -202,16 +208,33 @@ require __DIR__ . '/auth.php';
     // ストリーミング対応のアクション（リアルタイムログが必要な処理）
     const streamingActions = ['build', 'dev', 'install', 'deploy'];
     
+    // 全てのボタンを無効化/有効化する関数
+    function disableAllButtons(disabled = true) {
+      const buttons = document.querySelectorAll('.controls button');
+      buttons.forEach(btn => {
+        btn.disabled = disabled;
+        if (disabled) {
+          btn.style.opacity = '0.5';
+          btn.style.cursor = 'not-allowed';
+        } else {
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }
+      });
+    }
+    
     async function send(action) {
       const button = event.target;
       const originalText = button.textContent;
+      
+      // 全てのボタンを無効化
+      disableAllButtons(true);
       
       // ボタンクリック時のフィードバック
       button.classList.add('button-clicked');
       setTimeout(() => button.classList.remove('button-clicked'), 300);
       
-      // ローディング状態を設定
-      button.disabled = true;
+      // ローディング状態を設定（クリックされたボタンのみ）
       button.classList.add('loading');
       button.textContent = '処理中...';
       
@@ -255,9 +278,11 @@ require __DIR__ . '/auth.php';
         statusEl.style.color = '#dc3545';
       } finally {
         // ローディング状態を解除
-        button.disabled = false;
         button.classList.remove('loading');
         button.textContent = originalText;
+        
+        // 全てのボタンを有効化
+        disableAllButtons(false);
       }
     }
 
@@ -305,7 +330,7 @@ require __DIR__ . '/auth.php';
       }
     }
     
-    // ログクリア機能
+    // ログクリア機能（処理中でも使用可能）
     function clearLog() {
       document.getElementById('status').textContent = '-- ステータス表示 --';
       document.getElementById('status').style.color = '#333';
@@ -313,6 +338,15 @@ require __DIR__ . '/auth.php';
 
     // 停止確認ダイアログ
     function confirmStop() {
+      // 処理中でなければ実行
+      const buttons = document.querySelectorAll('.controls button');
+      const isProcessing = Array.from(buttons).some(btn => btn.classList.contains('loading'));
+      
+      if (isProcessing) {
+        alert('⚠️ 現在処理中です。処理が完了するまでお待ちください。');
+        return;
+      }
+      
       if (confirm('⚠️ 注意: この操作はリバースプロキシ(nginx)を停止します:\n\n• 外部からのアクセス (ポート80) が停止されます\n• Next.jsアプリは稼働を継続します (ポート3000で直接アクセス可能)\n\n再開するには「🔄 nginx再起動」ボタンを使用してください。\n\n本当に停止しますか？')) {
         send('stop');
       }

@@ -1,22 +1,5 @@
 # Next.js PHP 管理ツール
 
-## 概要 / Overview
-PHP ベースの Web インターフェースから Next.js アプリケーションを  
-- ビルド  
-- 起動  
-- 停止  
-- 再起動  
-- 状態確認  
-- Git プル  
-- 環境変数管理  
-- リアルタイムログ監視  
-
-できる多機能な管理ツールです。Docker 対応と Digest 認証による安全なアクセス制御を提供します。  
-
-This is a comprehensive PHP-based web tool to manage Next.js applications with features like build automation, process management, Git integration, environment variable management, real-time log monitoring, Docker support, and secure Digest authentication.
-
----
-
 ## 目次 / Table of Contents
 1. [前提条件 / Prerequisites](#前提条件--prerequisites)  
 2. [ディレクトリ構成 / Directory Structure](#ディレクトリ構成--directory-structure)  
