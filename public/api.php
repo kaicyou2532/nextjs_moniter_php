@@ -313,35 +313,78 @@ function killPort3000Processes(): void {
     echo "=== ポート3000使用中のプロセスを停止 ===\n";
     flush();
     
-    // ポート3000を使用しているプロセスを検索
-    $output = shell_exec('lsof -ti:3000 2>/dev/null || netstat -tlnp 2>/dev/null | grep :3000 | awk \'{print $7}\' | cut -d/ -f1 2>/dev/null || ss -tlnp 2>/dev/null | grep :3000 | grep -o "pid=[0-9]*" | cut -d= -f2 2>/dev/null');
+    // 複数の方法でポート3000を使用しているプロセスを検索
+    $methods = [
+        'lsof -ti:3000 2>/dev/null',
+        'fuser 3000/tcp 2>/dev/null',
+        'ss -tlnp 2>/dev/null | grep :3000 | grep -o "pid=[0-9]*" | cut -d= -f2',
+        'netstat -tlnp 2>/dev/null | grep :3000 | awk \'{print $7}\' | cut -d/ -f1'
+    ];
     
-    if (!empty($output)) {
-        $pids = array_filter(explode("\n", trim($output)));
-        foreach ($pids as $pid) {
-            $pid = trim($pid);
-            if (is_numeric($pid) && $pid > 0) {
-                echo "[INFO] ポート3000使用中のプロセス PID: $pid を停止します\n";
-                posix_kill((int)$pid, SIGTERM);
-                sleep(1);
-                // SIGTERMで停止しない場合はSIGKILL
-                if (posix_kill((int)$pid, 0)) {
-                    posix_kill((int)$pid, SIGKILL);
-                    echo "[INFO] 強制停止しました (PID: $pid)\n";
-                } else {
-                    echo "[OK] プロセスを停止しました (PID: $pid)\n";
+    $allPids = [];
+    foreach ($methods as $cmd) {
+        $output = shell_exec($cmd);
+        if (!empty($output)) {
+            $pids = array_filter(explode("\n", trim($output)));
+            foreach ($pids as $pid) {
+                $pid = trim($pid);
+                if (is_numeric($pid) && $pid > 0) {
+                    $allPids[$pid] = true;
                 }
+            }
+        }
+    }
+    
+    if (!empty($allPids)) {
+        echo "[INFO] 検出されたプロセス: " . implode(', ', array_keys($allPids)) . "\n";
+        
+        foreach (array_keys($allPids) as $pid) {
+            echo "[INFO] PID $pid を停止中...\n";
+            
+            // SIGTERM -> 待機 -> SIGKILL の順
+            exec("kill -TERM $pid 2>/dev/null", $output, $code);
+            sleep(1);
+            
+            // プロセスがまだ生きているか確認
+            exec("kill -0 $pid 2>/dev/null", $output, $stillAlive);
+            if ($stillAlive === 0) {
+                echo "[WARN] PID $pid が停止しないため強制終了します\n";
+                exec("kill -9 $pid 2>/dev/null");
+                sleep(1);
+            }
+            
+            // 最終確認
+            exec("kill -0 $pid 2>/dev/null", $output, $finalCheck);
+            if ($finalCheck === 0) {
+                echo "[ERR] PID $pid の停止に失敗しました\n";
+            } else {
+                echo "[OK] PID $pid を停止しました\n";
             }
         }
     } else {
         echo "[INFO] ポート3000を使用中のプロセスはありません\n";
     }
     
-    // Nodeプロセスも確認して停止
-    passthru('pkill -f "node.*3000" 2>/dev/null || true');
-    passthru('pkill -f "next.*start" 2>/dev/null || true');
-    passthru('pkill -f "next.*dev" 2>/dev/null || true');
-    echo "[OK] Node.js関連プロセスをクリーンアップしました\n";
+    // 追加のクリーンアップ（プロセス名ベース）
+    echo "[INFO] Next.js関連プロセスをクリーンアップ中...\n";
+    passthru('pkill -9 -f "next start" 2>/dev/null || true');
+    passthru('pkill -9 -f "next dev" 2>/dev/null || true');
+    passthru('pkill -9 -f "node.*next" 2>/dev/null || true');
+    
+    // fuserでポート強制解放
+    passthru('fuser -k 3000/tcp 2>/dev/null || true');
+    
+    sleep(2);
+    
+    // 最終確認
+    exec("lsof -ti:3000 2>/dev/null", $finalOutput, $finalCode);
+    if ($finalCode === 0 && !empty($finalOutput)) {
+        echo "[WARN] ポート3000がまだ使用中です。最終強制終了を試みます...\n";
+        passthru('lsof -ti:3000 | xargs kill -9 2>/dev/null || true');
+        sleep(1);
+    } else {
+        echo "[OK] ポート3000は解放されました\n";
+    }
     
     flush();
 }
@@ -1179,7 +1222,16 @@ switch ($action) {
                 exec("kill -9 " . implode(' ', $portCheck) . " 2>/dev/null");
                 sleep(1);
             }
-            echo "[OK] ポート3000のクリーンアップ完了\n\n";
+            echo "[OK] ポート3000のクリーンアップ完了\n";
+            
+            // ログファイルをクリア（新しいログのため）
+            if (file_exists(LOG_FILE)) {
+                echo "[INFO] 古いログファイルをクリア中...\n";
+                file_put_contents(LOG_FILE, '');
+                echo "[OK] ログファイルをクリアしました\n";
+            }
+            
+            echo "\n";
             
             // 6. Next.jsアプリケーション起動
             echo "--- STEP 6: アプリケーション起動 ---\n";
