@@ -12,7 +12,7 @@
 9. [パーミッション / Permissions](#パーミッション--permissions)  
 10. [macOS での検証 / macOS Testing](#macos-での検証--macos-testing)  
 11. [トラブルシューティング / Troubleshooting](#トラブルシューティング--troubleshooting)  
-12. [ライセンス / License](#ライセンス--license)
+
 
 ---
 

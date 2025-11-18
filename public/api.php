@@ -244,12 +244,48 @@ function GitPull(): bool {
         }
     }
 
+    // ローカル変更があるか確認
+    echo "[INFO]ローカル変更を確認中...\n";
+    exec('HOME=/root git status --porcelain 2>&1', $statusOutput, $statusCode);
+    
+    $hasChanges = !empty($statusOutput);
+    if ($hasChanges) {
+        echo "[WARN]ローカルに変更されたファイルがあります:\n";
+        foreach ($statusOutput as $line) {
+            echo "  $line\n";
+        }
+        
+        echo "[INFO]ローカル変更を一時保存(stash)中...\n";
+        passthru('HOME=/root git stash save "Auto-stash before deploy at ' . date('Y-m-d H:i:s') . '" 2>&1', $stashCode);
+        
+        if ($stashCode === 0) {
+            echo "[OK]ローカル変更を一時保存しました\n";
+        } else {
+            echo "[WARN]stashに失敗しましたが続行します\n";
+        }
+    } else {
+        echo "[INFO]ローカル変更はありません\n";
+    }
+
     // main ブランチを pull
     echo "[INFO]最新版を取得中...\n";
     passthru('HOME=/root git pull origin main 2>&1', $code);
     
     if ($code === 0) {
         echo "[OK]最新版の取得が完了しました\n";
+        
+        // stashした変更がある場合の処理
+        if ($hasChanges && $stashCode === 0) {
+            echo "\n[INFO]一時保存したローカル変更の扱いについて:\n";
+            echo "  - 変更を破棄: デプロイ後に最新版のみを使用\n";
+            echo "  - 変更を復元: stash pop でローカル変更を復元（競合の可能性あり）\n";
+            echo "[INFO]デフォルトでは変更を破棄します（本番環境推奨）\n";
+            echo "[INFO]変更を確認するには: git stash list\n";
+            echo "[INFO]変更を復元するには: git stash pop\n\n";
+            
+            // デフォルトでは変更を保持（破棄しない）
+            // 必要に応じて手動で git stash drop できる
+        }
         
         // 環境変数ファイルを復元
         if (file_exists($envBackup)) {
@@ -268,6 +304,18 @@ function GitPull(): bool {
         return true;
     } else {
         echo "[ERR]git pull失敗 (exit $code)\n";
+        
+        // pull失敗時はstashを復元
+        if ($hasChanges && $stashCode === 0) {
+            echo "[INFO]git pull失敗のためローカル変更を復元中...\n";
+            passthru('HOME=/root git stash pop 2>&1', $popCode);
+            if ($popCode === 0) {
+                echo "[OK]ローカル変更を復元しました\n";
+            } else {
+                echo "[WARN]ローカル変更の復元に失敗しました\n";
+                echo "[INFO]手動で復元するには: git stash pop\n";
+            }
+        }
         
         // 失敗時もバックアップから復元を試行
         if (file_exists($envBackup)) {
