@@ -57,9 +57,7 @@ docker exec nextjs-monitor-php tail -f /var/log/supervisor/apache2.log
 docker exec nextjs-monitor-php tail -f /var/log/supervisor/nginx.log
 ```
 
-## 認証情報
-- ユーザー名: admin
-- パスワード: aimgstaff
+
 
 ## 技術構成
 - **PHP 8.3 + Apache**: Web管理ツール
