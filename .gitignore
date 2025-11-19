@@ -17,7 +17,7 @@ yarn-error.log*
 
 # Docker
 .docker/
-DOCKER.node_modules
+DOCKER.md
 
 # IDE
 .vscode/
