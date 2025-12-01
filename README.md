@@ -82,8 +82,8 @@ chmod 775 logs pids
 ### 4. Web サーバー設定
 **Apache の場合:**
 ```apache
-DocumentRoot /home/nakamura/nextjs_moniter_php/public
-<Directory "/home/nakamura/nextjs_moniter_php/public">
+DocumentRoot /path/to/nextjs_moniter_php/public
+<Directory "/path/to/nextjs_moniter_php/public">
     AllowOverride All
     Require all granted
 </Directory>
@@ -93,7 +93,7 @@ DocumentRoot /home/nakamura/nextjs_moniter_php/public
 ```nginx
 server {
     listen 80;
-    root /home/nakamura/nextjs_moniter_php/public;
+    root /path/to/nextjs_moniter_php/public;
     index index.php;
     
     location ~ \.php$ {
@@ -112,7 +112,7 @@ server {
 `public/api.php` 内の以下の定数を環境に合わせて調整:
 
 ```php
-define('BASE_DIR', '/home/nakamura/nextjs_moniter_php');
+define('BASE_DIR', '/path/to/nextjs_moniter_php');
 define('NEXT_DIR', BASE_DIR . '/next-app');
 define('LOG_FILE', BASE_DIR . '/logs/nextjs.log');
 define('PID_FILE', BASE_DIR . '/pids/nextjs.pid');
@@ -156,12 +156,6 @@ AUTH_USERNAME=admin
 AUTH_PASSWORD=your_secure_password
 AUTH_REALM=Next.js 管理ツール
 ```
-
-### 3. セキュリティ確認
-- `.env.auth` ファイルが `.gitignore` に含まれていることを確認
-- パスワードは十分に複雑なものを使用
-- 本番環境では HTTPS を使用することを推奨
-
 ---
 
 ## 環境変数設定 / Environment Variables
@@ -266,7 +260,7 @@ http://your-server/
 **ローカル環境の場合:**
 ```bash
 # 1. プロジェクトルートに .env ファイルを作成
-cd /home/nakamura/nextjs_moniter_php
+cd /path/to/nextjs_moniter_php
 cp .env.example .env
 
 # 2. 実際の値を設定
@@ -349,7 +343,7 @@ chmod +x public/*.php
 
 ### 組み込み PHP サーバーでのテスト
 ```bash
-cd /home/nakamura/nextjs_moniter_php/public
+cd /path/to/nextjs_moniter_php/public
 php -S localhost:8080
 ```
 
@@ -467,7 +461,7 @@ ChunkLoadError: Loading chunk 334 failed.
 
 **解決方法**:
 
-1. **完全再デプロイ** (最も効果的)
+1. **再デプロイ** 
    ```bash
    # 管理画面で「🚀 記事更新・ビルド・公開」ボタンをクリック
    # 以下が自動実行されます:
@@ -588,14 +582,4 @@ tail -f logs/nextjs.log
 # Docker ログ
 docker-compose logs -f nextjs-monitor
 ```
-
-### デバッグ機能の使用
-管理画面の「デバッグ情報」ボタンで以下の情報を確認:
-- PHP 環境情報
-- ディレクトリ構造
-- プロセス状態
-- 環境変数
-- Git 状態
-
----
 

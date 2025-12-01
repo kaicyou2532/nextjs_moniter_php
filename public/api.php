@@ -1106,7 +1106,8 @@ switch ($action) {
         if ($isStreaming) {
             echo "=== デプロイ開始 ===\n\n";
             
-            // 1. GitHubから最新版を取得
+            // 1. GitHubから最新版を取得（コメントアウト）
+            /*
             echo "--- STEP 1: GitHubから最新版を取得 ---\n";
             flush();
             if (GitPull()) {
@@ -1116,6 +1117,8 @@ switch ($action) {
                 echo "[INFO] デプロイを中断します\n";
                 break;
             }
+            */
+            echo "[INFO] Git Pull処理はスキップされました\n\n";
             
             // 2. .envから環境変数を.env.localにコピー
             echo "--- STEP 2: 環境変数を設定 ---\n";
