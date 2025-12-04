@@ -581,5 +581,67 @@ tail -f logs/nextjs.log
 
 # Docker ログ
 docker-compose logs -f nextjs-monitor
+
+# クリーンアップログ
+tail -f logs/cleanup.log
 ```
+
+---
+
+## ディスク容量管理 / Disk Space Management
+
+### 自動クリーンアップスクリプト
+
+ディスク空き容量が500MB以下になった場合、自動的に不要なファイルを削除するスクリプトが用意されています。
+
+#### クリーンアップ対象
+- **Dockerビルドキャッシュ**: `docker builder prune`, `docker image prune`
+- **Next.jsビルドデータ**: `.next/`, `node_modules/`, `.npm-cache/`, `.tmp/`
+- **古いログファイル**: 30日以上前のログ
+
+#### セットアップ方法
+
+1. **実行権限を付与**
+```bash
+chmod +x disk-cleanup.sh setup-cron.sh force-cleanup.sh
+```
+
+2. **cronジョブを設定（6時間おきに実行）**
+```bash
+./setup-cron.sh
+```
+
+これにより、以下のcronジョブが追加されます:
+```
+0 */6 * * * /path/to/nextjs_moniter_php/disk-cleanup.sh >> /path/to/nextjs_moniter_php/logs/cleanup.log 2>&1
+```
+
+3. **手動でテスト実行**
+```bash
+# 閾値チェック付きで実行
+./disk-cleanup.sh
+
+# 強制的にクリーンアップを実行（閾値無視）
+./force-cleanup.sh
+```
+
+4. **ログ確認**
+```bash
+tail -f logs/cleanup.log
+```
+
+#### cronジョブの確認・削除
+```bash
+# 現在のcronジョブを確認
+crontab -l
+
+# cronジョブを編集（削除する場合）
+crontab -e
+```
+
+#### スクリプトの動作
+- 6時間おき（0時、6時、12時、18時）に自動実行
+- ディスク空き容量が500MB以下の場合のみクリーンアップ実行
+- クリーンアップ前後の容量を記録
+- すべての操作をログファイルに記録
 
