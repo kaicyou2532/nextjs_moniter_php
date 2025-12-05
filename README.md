@@ -432,7 +432,74 @@ rm -rf .next
 node -v  # 18+ 必要
 ```
 
-#### 3. ポート衝突エラー
+#### 3-1. パーミッションエラー (EACCES)
+**問題**: ビルド時に `.next` ディレクトリの削除でパーミッションエラー
+```
+Error: EACCES: permission denied, unlink '/var/www/html/next-app/.next/server/app-paths-manifest.json'
+```
+
+**原因**:
+- `.next` ディレクトリのファイルが読み取り専用になっている
+- 以前のビルドプロセスが異なるユーザー権限で実行された
+- Docker環境でのパーミッション不整合
+
+**解決方法**:
+
+1. **管理画面から再デプロイ（推奨）**
+   ```bash
+   # 管理画面で「🚀 記事更新・ビルド・公開」ボタンをクリック
+   # STEP 3で自動的にパーミッション修正後に削除されます
+   ```
+
+2. **手動でパーミッション修正**
+   ```bash
+   # Docker環境の場合
+   docker exec -it nextjs-monitor-php-new bash
+   cd /var/www/html/next-app
+   
+   # パーミッションを変更してから削除
+   chmod -R 777 .next
+   rm -rf .next
+   
+   # 再ビルド
+   npm run build
+   
+   exit
+   ```
+
+3. **ローカル環境の場合**
+   ```bash
+   cd next-app
+   
+   # パーミッション変更
+   chmod -R 755 .next
+   
+   # 削除
+   rm -rf .next node_modules
+   
+   # 再インストール・ビルド
+   npm install
+   npm run build
+   ```
+
+4. **完全リセット（最終手段）**
+   ```bash
+   # Docker環境
+   docker exec -it nextjs-monitor-php-new bash
+   cd /var/www/html/next-app
+   
+   # すべてのファイルのパーミッションをリセット
+   chmod -R 777 .
+   rm -rf .next node_modules .npm-cache .tmp package-lock.json
+   
+   # 再構築
+   npm install
+   npm run build
+   
+   exit
+   ```
+
+#### 4. ポート衝突エラー
 **問題**: ポート 3000 が使用中
 ```bash
 # 解決方法

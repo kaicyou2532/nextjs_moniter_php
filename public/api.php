@@ -1164,10 +1164,15 @@ switch ($action) {
             foreach ($toDelete as $path => $description) {
                 if (file_exists($path)) {
                     echo "[INFO] $description を削除中...\n";
+                    
+                    // 削除前にパーミッションを変更（書き込み可能にする）
                     if (is_dir($path)) {
-                        passthru("rm -rf $path 2>&1", $code);
+                        echo "[INFO] パーミッションを変更中...\n";
+                        passthru("chmod -R 777 " . escapeshellarg($path) . " 2>&1 || true");
+                        passthru("rm -rf " . escapeshellarg($path) . " 2>&1", $code);
                     } else {
-                        passthru("rm -f $path 2>&1", $code);
+                        passthru("chmod 666 " . escapeshellarg($path) . " 2>&1 || true");
+                        passthru("rm -f " . escapeshellarg($path) . " 2>&1", $code);
                     }
                     
                     if ($code === 0 && !file_exists($path)) {
