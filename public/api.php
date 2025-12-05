@@ -1168,9 +1168,25 @@ switch ($action) {
                     // 削除前にパーミッションを変更（書き込み可能にする）
                     if (is_dir($path)) {
                         echo "[INFO] パーミッションを変更中...\n";
+                        // chownでrootに変更してから削除（特にnode_modules内のバイナリファイル対策）
+                        passthru("chown -R root:root " . escapeshellarg($path) . " 2>&1 || true");
                         passthru("chmod -R 777 " . escapeshellarg($path) . " 2>&1 || true");
+                        
+                        // 通常削除を試行
                         passthru("rm -rf " . escapeshellarg($path) . " 2>&1", $code);
+                        
+                        // 失敗した場合は強制削除（findコマンドで個別に削除）
+                        if ($code !== 0 && file_exists($path)) {
+                            echo "[INFO] 通常削除失敗、強制削除を試行中...\n";
+                            passthru("find " . escapeshellarg($path) . " -delete 2>&1 || true");
+                            
+                            // それでも残っている場合は警告のみ
+                            if (file_exists($path)) {
+                                echo "[WARN] 一部ファイルが削除できませんでした。npm installで上書きされます\n";
+                            }
+                        }
                     } else {
+                        passthru("chown root:root " . escapeshellarg($path) . " 2>&1 || true");
                         passthru("chmod 666 " . escapeshellarg($path) . " 2>&1 || true");
                         passthru("rm -f " . escapeshellarg($path) . " 2>&1", $code);
                     }

@@ -20,6 +20,9 @@ services:
       - nextjs-app-data:/var/www/html/next-app
       - logs-data:/var/www/html/logs
       - pids-data:/var/www/html/pids
+      
+      # 環境変数ファイルをマウント
+      - ./.env:/var/www/html/.env:ro
     environment:
       - GITURL=https://github.com/AIM-SC/next-website.git
       - HOME=/root
