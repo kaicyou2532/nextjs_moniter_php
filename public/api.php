@@ -1261,6 +1261,20 @@ switch ($action) {
             echo "--- STEP 5: ビルド実行 ---\n";
             flush();
             
+            // ビルド直前に.nextを再度削除（パーミッション問題対策）
+            if (file_exists('.next')) {
+                echo "[INFO] ビルド前に.nextディレクトリを再削除中...\n";
+                passthru("chown -R root:root .next 2>&1 || true");
+                passthru("chmod -R 777 .next 2>&1 || true");
+                passthru("rm -rf .next 2>&1 || true");
+                
+                if (file_exists('.next')) {
+                    echo "[WARN] .nextの削除に失敗しましたが、ビルドを続行します\n";
+                } else {
+                    echo "[OK] .nextを削除しました\n";
+                }
+            }
+            
             $buildCode = executeWithLiveOutput('npm run build 2>&1', NEXT_DIR);
             
             if ($buildCode !== 0) {
