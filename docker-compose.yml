@@ -11,12 +11,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # Dockerホストへのアクセスを有効化
     volumes:
-      # ローカルマウント方式（パーミッション問題がある場合はコメントアウト）
-      # - ./next-app:/var/www/html/next-app
-      # - ./logs:/var/www/html/logs  
-      # - ./pids:/var/www/html/pids
-      
-      # Docker volume方式（安定版）
+
       - nextjs-app-data:/var/www/html/next-app
       - logs-data:/var/www/html/logs
       - pids-data:/var/www/html/pids
