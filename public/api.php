@@ -50,7 +50,7 @@ function restartNginx(): void {
         // supervisorctl でnginx再起動（rootユーザーで実行）
         echo "[INFO]supervisorctl経由でnginxを再起動...\n";
         
-        // 再起動コマンド（stop + start の代わりに restart を使用）
+        // 再起動コマンド
         passthru('supervisorctl restart nginx 2>&1', $restartCode);
         
         if ($restartCode === 0) {
@@ -125,7 +125,7 @@ function stopNginx(): void {
 }
 
 /**
- * Git リポジトリを origin/main から pull
+ * Git リポジトリを origin/main から pull(通常運用では不使用)
  */
 function GitPull(): bool {
     global $GitUrl;
@@ -1106,7 +1106,7 @@ switch ($action) {
         if ($isStreaming) {
             echo "=== デプロイ開始 ===\n\n";
             
-            // 1. GitHubから最新版を取得（コメントアウト）
+            // 1. GitHubから最新版を取得（通常運用では使用しない）
             /*
             echo "--- STEP 1: GitHubから最新版を取得 ---\n";
             flush();
@@ -1145,6 +1145,29 @@ switch ($action) {
             if (!is_dir(NEXT_DIR)) {
                 echo "[ERR] Next.jsプロジェクトが見つかりません\n";
                 break;
+            }
+            
+            // .nextディレクトリの事前削除（パーミッション問題の根本対策）
+            $nextPath = NEXT_DIR . '/.next';
+            if (is_dir($nextPath)) {
+                echo "[INFO] .nextディレクトリを事前削除中...\n";
+                passthru("chown -R root:root " . escapeshellarg($nextPath) . " 2>&1 || true");
+                passthru("chmod -R 777 " . escapeshellarg($nextPath) . " 2>&1 || true");
+                passthru("rm -rf " . escapeshellarg($nextPath) . " 2>&1 || true");
+                
+                // findコマンドで個別削除を試行
+                if (is_dir($nextPath)) {
+                    echo "[INFO] 通常削除失敗。個別削除を試行中...\n";
+                    passthru("find " . escapeshellarg($nextPath) . " -type f -delete 2>&1 || true");
+                    passthru("find " . escapeshellarg($nextPath) . " -type d -delete 2>&1 || true");
+                    passthru("rm -rf " . escapeshellarg($nextPath) . " 2>&1 || true");
+                }
+                
+                if (!is_dir($nextPath)) {
+                    echo "[OK] .nextディレクトリを削除しました\n\n";
+                } else {
+                    echo "[WARN] .nextディレクトリが削除できません。次の手段に進みます...\n\n";
+                }
             }
             
             chdir(NEXT_DIR);
