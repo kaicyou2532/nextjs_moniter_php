@@ -70,7 +70,7 @@ nextjs_moniter_php/
 - コンテナ名: `nextjs-monitor-php-new`
 - サービス名（compose）: `nextjs-monitor`
 
-## 運用コマンド（本番向け）
+## 運用コマンド
 
 ### 起動・停止
 
