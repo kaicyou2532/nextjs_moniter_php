@@ -105,38 +105,6 @@ docker exec -it nextjs-monitor-php-new node -v
 docker exec -it nextjs-monitor-php-new bash -lc 'cd /var/www/html/next-app && npm ls next'
 ```
 
-## よくある詰まりどころ
-
-### コンテナ名を間違える
-
-`docker exec` は `docker ps` の `NAMES` を指定してください。
-
-```bash
-docker ps
-docker exec -it nextjs-monitor-php-new node -v
-```
-
-### 「最新コードが反映されない」
-
-Docker では `nextjs-app-data`（名前付きボリューム）に Next.js が保持されます。
-完全に作り直したい場合はボリュームも削除します（データが消えるので注意）。
-
-```bash
-docker compose down
-docker volume rm nextjs_moniter_php_nextjs-app-data 2>/dev/null || true
-docker compose up -d --build
-```
-
-### ビルド時の `EACCES`（`.next` 削除失敗など）
-
-```bash
-docker exec -it nextjs-monitor-php-new bash -lc 'cd /var/www/html/next-app && chmod -R 777 .next 2>/dev/null || true && rm -rf .next'
-```
-
-### `ChunkLoadError` など静的ファイル不整合
-
-- 再デプロイ後にブラウザの強制リロード（`Cmd+Shift+R`）
-- それでもダメなら `.next` を削除して再ビルド（上の `EACCES` 手順）
 
 ## ディスク容量管理
 
