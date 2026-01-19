@@ -4,6 +4,8 @@
 .env.local
 .env.production
 .env.development
+.env.example
+.env.auth.example
 
 # ログファイル
 logs/

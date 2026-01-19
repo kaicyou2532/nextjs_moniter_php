@@ -7,7 +7,7 @@ Next.js サイトと、デプロイ・ログ確認・再起動などを行う PH
 - 管理画面（Apache 直）: `http://<host>:8080/`（ポート `8080`）
 - Next.js 直アクセス（任意）: `http://<host>:3000/`（ポート `3000`）
 
-## まずは Docker（推奨）
+## dockerについて
 
 この構成では Next.js の実体はコンテナ内の `/var/www/html/next-app` に置きます。
 `docker-compose.yml` は `nextjs-app-data` という名前付きボリュームを使うため、ホスト側の `next-app/` にソースが無くても動きます（初回デプロイ時に `GITURL` から取得）。
@@ -49,7 +49,6 @@ nextjs_moniter_php/
 ├── nginx.conf
 ├── supervisord.conf
 ├── DOCKER.md                # Docker運用メモ
-└── *.sh                     # 運用補助スクリプト
 ```
 
 ## 主要な設定
