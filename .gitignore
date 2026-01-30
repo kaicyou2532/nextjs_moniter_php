@@ -1,15 +1,18 @@
-# 認証情報ファイル（機密情報）
-.env.auth
+# 環境変数・認証情報（機密情報）
 .env
-.env.local
-.env.production
-.env.development
-.env.example
-.env.auth.example
+.env.*
+!.env.example
+
+.env.auth
+!.env.auth.example
 
 # ログファイル
 logs/
 *.log
+
+# PID
+pids/
+*.pid
 
 # Node.js
 node_modules/
@@ -17,9 +20,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Next.js build
+.next/
+out/
+.turbo/
+next-env.d.ts
+
 # Docker
 .docker/
-DOCKER.md
 
 # IDE
 .vscode/
@@ -29,6 +37,15 @@ DOCKER.md
 .DS_Store
 Thumbs.db
 
+# macOS
+.AppleDouble
+.LSOverride
+
 # 一時ファイル
 *.tmp
 *.temp
+
+# Editor swap/backup
+*~
+*.swp
+*.swo
