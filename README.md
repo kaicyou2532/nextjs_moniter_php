@@ -7,10 +7,9 @@ Dockerコンテナ内で、以下をまとめて動かす運用ツールです�
 - 管理画面から「ビルド・記事の公開操作」を実行
 - リバースプロキシで Next.jsのコンテンツを配信
 
-
 管理画面の主な操作（public/index.php）:
 
--  記事更新・ビルド・公開（action: `deploy`）
+ - 記事更新・ビルド・公開（action: `deploy`）
    - `.env` → `next-app/.env.local` をコピー
    - `next-app` 配下をクリーンアップ（`.next` / `node_modules` 等）
    - `npm install` → `npm run build` → Next.js 起動 → nginx 再起動
@@ -61,7 +60,7 @@ Dockerコンテナ内で、以下をまとめて動かす運用ツールです�
 - `http://localhost/admin`（nginx 経由）
    - nginx の `/admin` は URI を書き換えません。Apache 側に `/admin` ルーティングが無い場合は 404 になります。
 
-## dockerコンテナの利用方法
+## dockerコンテナの立て方
 
 ### 1) 初期ファイルを用意
 
@@ -95,7 +94,7 @@ Next.js が未配置の場合、管理画面のビルドは失敗します（`ne
 docker exec -it nextjs-monitor-php-new bash
 cd /var/www/html
 rm -rf next-app
-git clone
+git clone https://github.com/AIM-SC/next-website.git next-app
 exit
 ```
 
