@@ -118,6 +118,7 @@ docker exec -it nextjs-monitor-php-new supervisorctl status
 - ベースイメージは `php:8.3-apache` です。CVE 対応は「最新イメージで再ビルド」が基本になります。
 - 例（ローカルで最新を取り込んでビルド）:
 
+
 ```bash
 docker compose build --pull
 docker compose up -d
