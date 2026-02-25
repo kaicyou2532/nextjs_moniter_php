@@ -1298,10 +1298,12 @@ switch ($action) {
             // npm install — cd と --prefix で作業ディレクトリを二重に固定する
             // (proc_open に cwd を渡すようにしたが、念のためシェル側でも明示)
             $nextDirEsc = escapeshellarg(NEXT_DIR);
-            $installCmd = 'cd ' . $nextDirEsc . ' && ' .
-                         'export TMPDIR=' . $nextDirEsc . '/.tmp && ' .
-                         'export npm_config_cache=' . $nextDirEsc . '/.npm-cache && ' .
-                         'mkdir -p ' . $nextDirEsc . '/.tmp ' . $nextDirEsc . '/.npm-cache && ' .
+            $hostTmpDir = '/tmp/nextjs-tmp';
+            $hostNpmCache = '/tmp/nextjs-npm-cache';
+            $installCmd = 'mkdir -p ' . escapeshellarg($hostTmpDir) . ' ' . escapeshellarg($hostNpmCache) . ' && ' .
+                         'chmod -R 777 ' . escapeshellarg($hostTmpDir) . ' ' . escapeshellarg($hostNpmCache) . ' && ' .
+                         'cd ' . $nextDirEsc . ' && ' .
+                         'TMPDIR=' . $hostTmpDir . ' npm_config_cache=' . $hostNpmCache . ' HOME=/root ' .
                          'npm install --prefix ' . $nextDirEsc . ' --prefer-offline --no-audit --no-fund 2>&1';
             
             $installCode = executeWithLiveOutput($installCmd, NEXT_DIR);
