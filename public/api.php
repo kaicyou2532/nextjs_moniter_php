@@ -591,6 +591,36 @@ function createNextJsEnvFile() {
 }
 
 /**
+ * Next.jsプロジェクト（package.json）が利用可能か確認し、無ければ取得を試行
+ */
+function ensureNextJsProjectAvailable(bool $autoCloneIfMissing = true): bool {
+    if (is_dir(NEXT_DIR) && is_file(NEXT_DIR . '/package.json')) {
+        return true;
+    }
+
+    echo "[WARN] Next.jsプロジェクトが未配置、または package.json がありません: " . NEXT_DIR . "\n";
+
+    if (!$autoCloneIfMissing) {
+        echo "[INFO] 先に『GitHubから最新版を取得』を実行してください\n";
+        return false;
+    }
+
+    echo "[INFO] GITURL から Next.js プロジェクト取得を試行します...\n";
+    $ok = GitPull();
+    if (!$ok) {
+        echo "[ERR] Next.jsプロジェクトの取得に失敗しました\n";
+        return false;
+    }
+
+    if (!is_dir(NEXT_DIR) || !is_file(NEXT_DIR . '/package.json')) {
+        echo "[ERR] 取得後も package.json が見つかりません。GITURL の内容を確認してください\n";
+        return false;
+    }
+
+    return true;
+}
+
+/**
  * コマンドをバックグラウンドで実行してPIDを保存
  */
 function startInBackground(string $command, string $workingDir = null): bool {
@@ -1105,20 +1135,16 @@ switch ($action) {
         // デプロイ処理（Git更新 → 環境変数設定 → ビルド → 起動）
         if ($isStreaming) {
             echo "=== デプロイ開始 ===\n\n";
-            
-            // 1. GitHubから最新版を取得（通常運用では使用しない）
-            /*
-            echo "--- STEP 1: GitHubから最新版を取得 ---\n";
+
+            // 1. Next.jsプロジェクト存在確認（未配置なら取得を試行）
+            echo "--- STEP 1: Next.jsプロジェクト確認 ---\n";
             flush();
-            if (GitPull()) {
-                echo "[OK] 最新版の取得が完了しました\n\n";
-            } else {
-                echo "[ERR] 最新版の取得に失敗しました\n";
+            if (!ensureNextJsProjectAvailable(true)) {
+                echo "[ERR] Next.jsプロジェクトが準備できません\n";
                 echo "[INFO] デプロイを中断します\n";
                 break;
             }
-            */
-            echo "[INFO] Git Pull処理はスキップされました\n\n";
+            echo "[OK] Next.jsプロジェクトを確認しました\n\n";
             
             // 2. .envから環境変数を.env.localにコピー
             echo "--- STEP 2: 環境変数を設定 ---\n";
@@ -1142,7 +1168,7 @@ switch ($action) {
             echo "--- STEP 3: 完全クリーンアップ ---\n";
             flush();
             
-            if (!is_dir(NEXT_DIR)) {
+            if (!ensureNextJsProjectAvailable(false)) {
                 echo "[ERR] Next.jsプロジェクトが見つかりません\n";
                 break;
             }
@@ -1151,8 +1177,8 @@ switch ($action) {
             $nextPath = NEXT_DIR . '/.next';
             if (is_dir($nextPath)) {
                 echo "[INFO] .nextディレクトリを事前削除中...\n";
-                passthru("chown -R root:root " . escapeshellarg($nextPath) . " 2>&1 || true");
-                passthru("chmod -R 777 " . escapeshellarg($nextPath) . " 2>&1 || true");
+                passthru("chown -R root:root " . escapeshellarg($nextPath) . " 2>/dev/null || true");
+                passthru("chmod -R 777 " . escapeshellarg($nextPath) . " 2>/dev/null || true");
                 passthru("rm -rf " . escapeshellarg($nextPath) . " 2>&1 || true");
                 
                 // findコマンドで個別削除を試行
@@ -1192,8 +1218,8 @@ switch ($action) {
                     if (is_dir($path)) {
                         echo "[INFO] パーミッションを変更中...\n";
                         // chownでrootに変更してから削除（特にnode_modules内のバイナリファイル対策）
-                        passthru("chown -R root:root " . escapeshellarg($path) . " 2>&1 || true");
-                        passthru("chmod -R 777 " . escapeshellarg($path) . " 2>&1 || true");
+                        passthru("chown -R root:root " . escapeshellarg($path) . " 2>/dev/null || true");
+                        passthru("chmod -R 777 " . escapeshellarg($path) . " 2>/dev/null || true");
                         
                         // 通常削除を試行
                         passthru("rm -rf " . escapeshellarg($path) . " 2>&1", $code);
@@ -1209,8 +1235,8 @@ switch ($action) {
                             }
                         }
                     } else {
-                        passthru("chown root:root " . escapeshellarg($path) . " 2>&1 || true");
-                        passthru("chmod 666 " . escapeshellarg($path) . " 2>&1 || true");
+                        passthru("chown root:root " . escapeshellarg($path) . " 2>/dev/null || true");
+                        passthru("chmod 666 " . escapeshellarg($path) . " 2>/dev/null || true");
                         passthru("rm -f " . escapeshellarg($path) . " 2>&1", $code);
                     }
                     
@@ -1252,6 +1278,13 @@ switch ($action) {
             
             echo "[INFO] package.jsonから依存関係を再インストール中...\n";
             echo "[INFO] これには数分かかる場合があります...\n\n";
+
+            if (!is_file(NEXT_DIR . '/package.json')) {
+                echo "[ERR] package.json が見つかりません（Next.jsプロジェクトが未配置の可能性）\n";
+                echo "[INFO] 先に『GitHubから最新版を取得』を実行するか、GITURL を確認してください\n";
+                echo "[INFO] デプロイを中断します\n";
+                break;
+            }
             
             // npm install with environment variables
             $installCmd = 'export TMPDIR="$(pwd)/.tmp" && ' .

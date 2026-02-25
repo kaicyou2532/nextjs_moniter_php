@@ -1,0 +1,142 @@
+<mxfile host="app.diagrams.net" modified="2026-01-30T00:00:00.000Z" agent="GitHub Copilot" version="22.1.0" type="device">
+  <diagram id="arch-1" name="nextjs-monitor-php">
+    <mxGraphModel dx="1240" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Client -->
+        <mxCell id="client" value="クライアント&#xa;（ブラウザ）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="160" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- Host -->
+        <mxCell id="host" value="サーバー（ホストOS）&#xa;受信ポート: 80 / 8080 / 3000&#xa;（Dockerのportsでコンテナへ転送）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="260" y="30" width="360" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- Docker Engine -->
+        <mxCell id="docker" value="Docker Engine" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="260" y="160" width="360" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Container boundary -->
+        <mxCell id="container" value="コンテナ: nextjs-monitor-php-new&#xa;（docker-compose サービス: nextjs-monitor）" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="1020" height="520" as="geometry"/>
+        </mxCell>
+
+        <!-- supervisord -->
+        <mxCell id="supervisord" value="supervisord&#xa;（Apache/nginxを常駐起動）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="container">
+          <mxGeometry x="30" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <!-- nginx -->
+        <mxCell id="nginx" value="nginx :80&#xa;公開側リバースプロキシ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="container">
+          <mxGeometry x="300" y="40" width="260" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Apache -->
+        <mxCell id="apache" value="Apache + PHP :8080&#xa;DocumentRoot: /var/www/html/public" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="container">
+          <mxGeometry x="620" y="40" width="330" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- PHP app -->
+        <mxCell id="phpapp" value="PHP管理ツール&#xa;public/index.php + public/api.php&#xa;Digest認証: public/auth.php" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="container">
+          <mxGeometry x="620" y="150" width="330" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Next.js -->
+        <mxCell id="nextjs" value="Next.js (Node) :3000&#xa;起動: PHPが npm run start をBG起動&#xa;PID: /var/www/html/pids/nextjs.pid" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="container">
+          <mxGeometry x="300" y="170" width="260" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Volumes -->
+        <mxCell id="volumes" value="永続ボリューム&#xa;nextjs-app-data → /var/www/html/next-app&#xa;logs-data → /var/www/html/logs&#xa;pids-data → /var/www/html/pids" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="container">
+          <mxGeometry x="30" y="320" width="520" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- Env files -->
+        <mxCell id="env" value="設定ファイル&#xa;.env → /var/www/html/.env（read-onlyでマウント）&#xa;.env.auth（Digest認証設定）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="container">
+          <mxGeometry x="30" y="460" width="520" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Host service for /ig -->
+        <mxCell id="host8000" value="ホスト側サービス :8000&#xa;（/ig/ をここへプロキシ）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="680" y="160" width="380" height="60" as="geometry"/>
+        </mxCell>
+
+        <!-- Edges: client to host ports -->
+        <mxCell id="e1" value="HTTP :80" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="1" source="client" target="host">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e2" value="HTTP :8080" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="1" source="client" target="host">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e3" value="HTTP :3000（任意）" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="1" source="client" target="host">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Host to Docker -->
+        <mxCell id="e4" value="ports転送" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#9673a6;" edge="1" parent="1" source="host" target="docker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Docker to container -->
+        <mxCell id="e5" value="起動" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#9673a6;" edge="1" parent="1" source="docker" target="container">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- supervisord starts nginx/apache -->
+        <mxCell id="e6" value="起動/監視" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="container" source="supervisord" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="起動/監視" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="container" source="supervisord" target="apache">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- nginx proxies -->
+        <mxCell id="e8" value="/ → :3000" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="container" source="nginx" target="nextjs">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="/admin → :8080" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="container" source="nginx" target="apache">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- nginx /ig to host -->
+        <mxCell id="e10" value="/ig/ → host.docker.internal:8000" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#d79b00;" edge="1" parent="1" source="nginx" target="host8000">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Apache serves PHP app -->
+        <mxCell id="e11" value="配信" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="apache" target="phpapp">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- PHP controls nginx + Next.js -->
+        <mxCell id="e12" value="supervisorctl restart/stop nginx" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="container" source="phpapp" target="nginx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" value="npm install/build/start&#xa;（BG起動+PID管理）" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="phpapp" target="nextjs">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- PHP and Next.js use volumes/env -->
+        <mxCell id="e14" value="read/write" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="phpapp" target="volumes">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" value="read/write" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="nextjs" target="volumes">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e16" value="設定参照" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="phpapp" target="env">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" value=".env → .env.local" style="endArrow=block;html=1;rounded=0;strokeWidth=2;" edge="1" parent="container" source="env" target="nextjs">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

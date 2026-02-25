@@ -88,6 +88,8 @@ docker compose up -d --build
 
 Next.js が未配置の場合、管理画面のビルドは失敗します（`next-app/package.json` が無いため）。
 
+補足: `deploy` 実行時に `next-app/package.json` が無い場合は、環境変数 `GITURL`（未設定ならデフォルト）からの取得を自動で試行します。
+
 例: コンテナ内で clone する場合
 
 ```bash
