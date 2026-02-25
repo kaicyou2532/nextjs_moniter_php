@@ -713,8 +713,14 @@ function startInBackground(string $command, string $workingDir = null): bool {
  * コマンドをリアルタイム実行してログを出力
  */
 function executeWithLiveOutput(string $command, string $workingDir = null): int {
+    // proc_open に cwd を明示的に渡す（Apache mod_php では chdir() だけでは
+    // サブプロセスの作業ディレクトリが変わらないケースがあるため）
+    $resolvedCwd = null;
     if ($workingDir) {
-        chdir($workingDir);
+        $resolvedCwd = realpath($workingDir) ?: $workingDir;
+        chdir($resolvedCwd);
+    } else {
+        $resolvedCwd = getcwd() ?: null;
     }
     
     $descriptorspec = [
@@ -723,7 +729,7 @@ function executeWithLiveOutput(string $command, string $workingDir = null): int 
         2 => ['pipe', 'w']   // stderr
     ];
     
-    $process = proc_open($command, $descriptorspec, $pipes);
+    $process = proc_open($command, $descriptorspec, $pipes, $resolvedCwd);
     
     if (is_resource($process)) {
         fclose($pipes[0]); // stdin を閉じる
@@ -795,7 +801,10 @@ switch ($action) {
             
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput(
+                'cd ' . escapeshellarg(NEXT_DIR) . ' && HOME=/root npm install --prefix ' . escapeshellarg(NEXT_DIR) . ' --cache /tmp/.npm 2>&1',
+                NEXT_DIR
+            );
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
@@ -807,7 +816,7 @@ switch ($action) {
                 
                 echo "\n=== ビルド開始 ===\n";
                 flush();
-                $code = executeWithLiveOutput('HOME=/root npm run build 2>&1', NEXT_DIR);
+                $code = executeWithLiveOutput('cd ' . escapeshellarg(NEXT_DIR) . ' && HOME=/root npm run build 2>&1', NEXT_DIR);
                 echo ($code === 0)
                     ? "\n[OK] ビルド完了\n"
                     : "\n[ERR] ビルド失敗 (exit $code)\n";
@@ -850,7 +859,7 @@ switch ($action) {
             
             echo "=== 依存関係インストール ===\n";
             chdir(NEXT_DIR);
-            passthru('npm install 2>&1', $code);
+            passthru('cd ' . escapeshellarg(NEXT_DIR) . ' && npm install --prefix ' . escapeshellarg(NEXT_DIR) . ' 2>&1', $code);
             echo ($code === 0)
                 ? "[OK] 依存関係インストール完了\n"
                 : "[ERR] 依存関係インストール失敗 (exit $code)\n";
@@ -913,7 +922,10 @@ switch ($action) {
             
             echo "=== 依存関係インストール開始 ===\n";
             flush();
-            $code = executeWithLiveOutput('HOME=/root npm install --cache /tmp/.npm 2>&1', NEXT_DIR);
+            $code = executeWithLiveOutput(
+                'cd ' . escapeshellarg(NEXT_DIR) . ' && HOME=/root npm install --prefix ' . escapeshellarg(NEXT_DIR) . ' --cache /tmp/.npm 2>&1',
+                NEXT_DIR
+            );
             echo ($code === 0)
                 ? "\n[OK] 依存関係インストール完了\n"
                 : "\n[ERR] 依存関係インストール失敗 (exit $code)\n";
@@ -1279,18 +1291,29 @@ switch ($action) {
             echo "[INFO] package.jsonから依存関係を再インストール中...\n";
             echo "[INFO] これには数分かかる場合があります...\n\n";
 
-            if (!is_file(NEXT_DIR . '/package.json')) {
-                echo "[ERR] package.json が見つかりません（Next.jsプロジェクトが未配置の可能性）\n";
+            // package.json の存在を確認（診断情報付き）
+            $pkgJsonPath = NEXT_DIR . '/package.json';
+            echo "[INFO] 作業ディレクトリ確認: " . NEXT_DIR . "\n";
+            echo "[INFO] package.json パス確認: " . $pkgJsonPath . "\n";
+            echo "[INFO] is_file チェック: " . (is_file($pkgJsonPath) ? 'OK（存在）' : 'NG（存在しない）') . "\n";
+            passthru('ls -la ' . escapeshellarg(NEXT_DIR) . ' 2>&1 | head -20');
+
+            if (!is_file($pkgJsonPath)) {
+                echo "[ERR] package.json が見つかりません: " . $pkgJsonPath . "\n";
+                echo "[INFO] GITURL: " . (getenv('GITURL') ?: '（未設定）') . "\n";
                 echo "[INFO] 先に『GitHubから最新版を取得』を実行するか、GITURL を確認してください\n";
                 echo "[INFO] デプロイを中断します\n";
                 break;
             }
             
-            // npm install with environment variables
-            $installCmd = 'export TMPDIR="$(pwd)/.tmp" && ' .
-                         'export npm_config_cache="$(pwd)/.npm-cache" && ' .
-                         'mkdir -p .tmp .npm-cache && ' .
-                         'npm install --prefer-offline --no-audit --no-fund 2>&1';
+            // npm install — cd と --prefix で作業ディレクトリを二重に固定する
+            // (proc_open に cwd を渡すようにしたが、念のためシェル側でも明示)
+            $nextDirEsc = escapeshellarg(NEXT_DIR);
+            $installCmd = 'cd ' . $nextDirEsc . ' && ' .
+                         'export TMPDIR=' . $nextDirEsc . '/.tmp && ' .
+                         'export npm_config_cache=' . $nextDirEsc . '/.npm-cache && ' .
+                         'mkdir -p ' . $nextDirEsc . '/.tmp ' . $nextDirEsc . '/.npm-cache && ' .
+                         'npm install --prefix ' . $nextDirEsc . ' --prefer-offline --no-audit --no-fund 2>&1';
             
             $installCode = executeWithLiveOutput($installCmd, NEXT_DIR);
             
