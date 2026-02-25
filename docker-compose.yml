@@ -18,6 +18,9 @@ services:
       
       # 環境変数ファイルをマウント
       - ./.env:/var/www/html/.env:ro
+
+      # PHP管理ファイルをバインドマウント（ホスト側を編集するだけで即反映、再ビルド不要）
+      - ./public:/var/www/html/public
     environment:
       - GITURL=https://github.com/AIM-SC/next-website.git
       - HOME=/root
