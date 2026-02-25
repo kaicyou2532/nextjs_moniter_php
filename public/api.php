@@ -148,71 +148,73 @@ function GitPull(): bool {
     echo "[INFO]現在のユーザー: " . trim(shell_exec('whoami')) . "\n";
     echo "[INFO]作業ディレクトリ: " . getcwd() . "\n";
     
-    // Next.jsディレクトリが存在しない場合はクローン
+    // Next.jsディレクトリが存在しない場合、または .git がない場合はクローン
     if (!is_dir(NEXT_DIR) || !is_dir(NEXT_DIR . '/.git')) {
-        // 既存ディレクトリを完全削除
-        if (is_dir(NEXT_DIR)) {
-            echo "[INFO]既存ディレクトリを削除中...\n";
-            passthru('chmod -R 777 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
-            passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
-            passthru('rm -rf ' . escapeshellarg(NEXT_DIR), $code);
-            
-            // 削除確認
-            if (is_dir(NEXT_DIR)) {
-                echo "[WARN]ディレクトリ削除に失敗。強制削除を試行中...\n";
-                passthru('sudo rm -rf ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
-            }
-        }
-        
-        // 親ディレクトリの権限確認
-        passthru('chmod 755 ' . escapeshellarg(BASE_DIR) . ' 2>/dev/null || true');
-        passthru('chown root:root ' . escapeshellarg(BASE_DIR) . ' 2>/dev/null || true');
-        
+
         // GitURLまたはデフォルトURLを使用
         $repoUrl = !empty($GitUrl) ? $GitUrl : 'https://github.com/AIM-SC/next-website.git';
-        
-        // 新しくクローン（rootユーザーで実行）
-        chdir(BASE_DIR);
-        
-        echo "[INFO]リポジトリをクローン中...\n";
+        echo "[INFO]使用リポジトリ: $repoUrl\n";
+
+        // ---- ディレクトリのクリーンアップ ----
+        // NEXT_DIR は Docker ボリュームマウントポイントの場合があり、
+        // rm -rf でディレクトリ本体を消せないことがある。
+        // そのため「中身だけ消す」方式を使い、その後 絶対パス指定で git clone する。
+        if (is_dir(NEXT_DIR)) {
+            echo "[INFO]既存ディレクトリの中身をクリア中...\n";
+            passthru('chmod -R 777 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
+            // ディレクトリ自体は残し、中身（隠しファイル含む）だけ削除
+            passthru('find ' . escapeshellarg(NEXT_DIR) . ' -mindepth 1 -delete 2>&1 || true', $clearCode);
+            if ($clearCode !== 0 || count(glob(NEXT_DIR . '/{,.}*', GLOB_BRACE)) > 2) {
+                // glob が . と .. だけなら空。それ以外は警告
+                echo "[WARN]一部ファイルが残っている可能性があります（続行します）\n";
+            } else {
+                echo "[OK]ディレクトリをクリアしました\n";
+            }
+        } else {
+            // ディレクトリ自体が存在しない場合は作成
+            mkdir(NEXT_DIR, 0755, true);
+        }
+
+        // ---- git clone（絶対パス指定） ----
+        // NEXT_DIR が空ディレクトリとして存在するので、
+        // 「git clone <url> <絶対パス>」で直接クローンする
+        echo "[INFO]リポジトリをクローン中: $repoUrl → " . NEXT_DIR . "\n";
         passthru(sprintf(
-            'HOME=/root GIT_CONFIG_GLOBAL=/root/.gitconfig git clone %s next-app 2>&1',
-            escapeshellarg($repoUrl)
+            'HOME=/root GIT_CONFIG_GLOBAL=/root/.gitconfig git clone %s %s 2>&1',
+            escapeshellarg($repoUrl),
+            escapeshellarg(NEXT_DIR)
         ), $code);
-        
+
         if ($code !== 0) {
-            echo "[ERR]リポジトリのクローンに失敗しました (exit $code)\n";
-            echo "[INFO]別の方法でクローンを試行中...\n";
-            
-            // 代替方法：wgetでダウンロード
-            passthru('mkdir -p ' . escapeshellarg(NEXT_DIR));
+            echo "[ERR]git clone に失敗しました (exit $code)\n";
+            echo "[INFO]ZIP ダウンロードで代替取得を試みます...\n";
+
+            // GITURLからZIPのURLを組み立て（GitHub前提）
+            $zipUrl = preg_replace('/\.git$/', '', $repoUrl) . '/archive/refs/heads/main.zip';
             passthru(sprintf(
-                'cd %s && curl -L https://github.com/AIM-SC/next-website/archive/refs/heads/main.zip -o main.zip && unzip -q main.zip && mv next-website-main/* . && rm -rf next-website-main main.zip 2>&1',
+                'curl -fsSL %s -o /tmp/next-app-main.zip 2>&1 && ' .
+                'unzip -q /tmp/next-app-main.zip -d /tmp/next-app-extract 2>&1 && ' .
+                'cp -rp /tmp/next-app-extract/*/* %s/ 2>&1 || ' .
+                'cp -rp /tmp/next-app-extract/*/. %s/ 2>&1 ; ' .
+                'rm -rf /tmp/next-app-main.zip /tmp/next-app-extract 2>/dev/null || true',
+                escapeshellarg($zipUrl),
+                escapeshellarg(NEXT_DIR),
                 escapeshellarg(NEXT_DIR)
             ), $altCode);
-            
-            if ($altCode === 0) {
-                echo "[OK]アーカイブダウンロードでリポジトリを取得しました\n";
-                // Git初期化
-                passthru(sprintf(
-                    'cd %s && git init && git remote add origin %s 2>&1',
-                    escapeshellarg(NEXT_DIR),
-                    escapeshellarg($repoUrl)
-                ));
-                $code = 0; // 成功扱い
+
+            if ($altCode === 0 && is_file(NEXT_DIR . '/package.json')) {
+                echo "[OK]ZIP ダウンロードでファイルを取得しました\n";
+                $code = 0;
             } else {
-                echo "[ERR]代替方法も失敗しました\n";
+                echo "[ERR]ZIP 取得も失敗しました。GITURL とネットワーク接続を確認してください\n";
                 return false;
             }
         }
-        
-        // 所有権とディレクトリ権限を修正
-        passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR), $chmodCode);
-        passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR), $chownCode);
-        
-        // Next.js環境変数ファイルを作成
-        createNextJsEnvFile();
-        
+
+        // 所有権と権限を修正
+        passthru('chmod -R 755 ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
+        passthru('chown -R root:root ' . escapeshellarg(NEXT_DIR) . ' 2>/dev/null || true');
+
         echo "[OK]リポジトリをクローンしました\n";
         return true;
     }
