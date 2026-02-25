@@ -12,7 +12,7 @@ services:
       - "host.docker.internal:host-gateway"  # Dockerホストへのアクセスを有効化
     volumes:
 
-      - nextjs-app-data:/var/www/html/next-app
+      - ./next-app:/var/www/html/next-app
       - logs-data:/var/www/html/logs
       - pids-data:/var/www/html/pids
       
@@ -35,6 +35,5 @@ services:
 
 # 名前付きボリューム
 volumes:
-  nextjs-app-data:
   logs-data:
   pids-data:
