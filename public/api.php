@@ -593,33 +593,21 @@ function createNextJsEnvFile() {
 }
 
 /**
- * Next.jsプロジェクト（package.json）が利用可能か確認し、無ければ取得を試行
+ * Next.jsプロジェクト（package.json）が利用可能か確認する
+ * git clone/pull は行わない。next-app に配置済みのファイルをそのまま使う。
  */
-function ensureNextJsProjectAvailable(bool $autoCloneIfMissing = true): bool {
+function ensureNextJsProjectAvailable(): bool {
     if (is_dir(NEXT_DIR) && is_file(NEXT_DIR . '/package.json')) {
+        echo "[INFO] package.json 確認: " . NEXT_DIR . "/package.json\n";
         return true;
     }
 
-    echo "[WARN] Next.jsプロジェクトが未配置、または package.json がありません: " . NEXT_DIR . "\n";
-
-    if (!$autoCloneIfMissing) {
-        echo "[INFO] 先に『GitHubから最新版を取得』を実行してください\n";
-        return false;
-    }
-
-    echo "[INFO] GITURL から Next.js プロジェクト取得を試行します...\n";
-    $ok = GitPull();
-    if (!$ok) {
-        echo "[ERR] Next.jsプロジェクトの取得に失敗しました\n";
-        return false;
-    }
-
-    if (!is_dir(NEXT_DIR) || !is_file(NEXT_DIR . '/package.json')) {
-        echo "[ERR] 取得後も package.json が見つかりません。GITURL の内容を確認してください\n";
-        return false;
-    }
-
-    return true;
+    echo "[ERR] package.json が見つかりません: " . NEXT_DIR . "/package.json\n";
+    echo "[INFO] /var/www/html/next-app に Next.js プロジェクトを配置してください\n";
+    echo "[INFO] 例: docker exec -it nextjs-monitor-php-new bash\n";
+    echo "[INFO]      git clone <リポジトリURL> /var/www/html/next-app\n";
+    passthru('ls -la ' . escapeshellarg(NEXT_DIR) . ' 2>&1 | head -20');
+    return false;
 }
 
 /**
@@ -1150,12 +1138,11 @@ switch ($action) {
         if ($isStreaming) {
             echo "=== デプロイ開始 ===\n\n";
 
-            // 1. Next.jsプロジェクト存在確認（未配置なら取得を試行）
+            // 1. Next.jsプロジェクト存在確認（git clone/pull は行わない）
             echo "--- STEP 1: Next.jsプロジェクト確認 ---\n";
             flush();
-            if (!ensureNextJsProjectAvailable(true)) {
-                echo "[ERR] Next.jsプロジェクトが準備できません\n";
-                echo "[INFO] デプロイを中断します\n";
+            if (!ensureNextJsProjectAvailable()) {
+                echo "[ERR] デプロイを中断します\n";
                 break;
             }
             echo "[OK] Next.jsプロジェクトを確認しました\n\n";
@@ -1182,7 +1169,7 @@ switch ($action) {
             echo "--- STEP 3: 完全クリーンアップ ---\n";
             flush();
             
-            if (!ensureNextJsProjectAvailable(false)) {
+            if (!ensureNextJsProjectAvailable()) {
                 echo "[ERR] Next.jsプロジェクトが見つかりません\n";
                 break;
             }
